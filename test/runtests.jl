@@ -1,6 +1,6 @@
-using FastNeuralDE
+using LocalRegNeuralDE
 using Test
 
-@testset "FastNeuralDE.jl" begin
+@testset "LocalRegNeuralDE.jl" begin
     # Write your tests here.
 end
