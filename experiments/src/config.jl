@@ -1,3 +1,9 @@
+@option struct LossConfig
+  w_reg_start::Float32 = 1.0f2
+  w_reg_end::Float32 = 1.0f1
+  w_reg_decay::String = "inverse"
+end
+
 @option struct SolverConfig
   ode_solver::String = "tsit5"
   abstol::Float32 = 5.0f-2
@@ -5,6 +11,7 @@
 end
 
 @option struct ModelConfig
+  regularize::String = "unbiased"
   solver::SolverConfig = SolverConfig()
 end
 
@@ -41,6 +48,7 @@ end
 
 @option struct ExperimentConfig
   seed::Int = 0
+  loss::LossConfig = LossConfig()
   model::ModelConfig = ModelConfig()
   optimizer::OptimizerConfig = OptimizerConfig()
   train::TrainConfig = TrainConfig()

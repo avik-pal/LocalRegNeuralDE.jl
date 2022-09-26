@@ -20,3 +20,20 @@ regularization.
 See [this Google Doc](https://docs.google.com/document/d/1ArAYWk4uix-RILJQRTCF3dIabsCCgtOvB9ZMQbFo1SA/edit?usp=sharing)
 (Ask for access. If you have access to this repository, I have probably just missed adding
 you to the doc.)
+
+## Installation
+
+This package is not registered in General Registry. Instead it can be installed from the
+[ResearchRegistry](https://github.com/avik-pal/ResearchRegistry).
+
+> **Note**
+> You might run into issues with Pkg cloning a private repository. If that happens, you
+  should start julia as `JULIA_PKG_USE_CLI_GIT=true julia` (or do
+  `export JULIA_PKG_USE_CLI_GIT=true` in your shell)
+
+```julia
+using Pkg
+pkg"registry add https://github.com/avik-pal/ResearchRegistry"
+pkg"add LocalRegNeuralDE"
+```
+
