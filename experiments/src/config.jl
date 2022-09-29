@@ -1,7 +1,7 @@
 @option struct LossConfig
   w_reg_start::Float32 = 1.0f2
   w_reg_end::Float32 = 1.0f1
-  w_reg_decay::String = "inverse"
+  w_reg_decay::String = "exponential"
 end
 
 @option struct SolverConfig
@@ -11,20 +11,46 @@ end
 end
 
 @option struct ModelConfig
+  model_type::String = "mlp"  # Options: `mlp`
   regularize::String = "unbiased"
+  image_size::Vector{Int64} = [32, 32]
+  in_channels::Int = 3
+  num_classes::Int = 10
+  # Solver
   solver::SolverConfig = SolverConfig()
+
+  # mlp
+  mlp_hidden_state_size::Int = 100
+  mlp_num_hidden_layers::Int = 1
+  mlp_time_dependent::Bool = true
+end
+
+@option struct LRSchedulerConfig
+  lr_scheduler::String = "inverse"
+
+  # cosine
+  cosine_lr_div_factor::Real = 100
+  cosine_cycle_length::Int = 50000
+  cosine_dampen::Float32 = 1.0f0
+
+  # step
+  step_lr_steps::Vector{Int64} = [1000, 2000, 5000]
+  step_lr_step_decay::Float32 = 0.1f0
+
+  # inverse
+  inverse_decay_factor::Float32 = 0.0001f0
+
+  # exponential
+  exponential_lr_div_factor::Real = 100
 end
 
 @option struct OptimizerConfig
-  lr_scheduler::String = "cosine"
   optimizer::String = "adam"
   learning_rate::Float32 = 0.01f0
   nesterov::Bool = false
   momentum::Float32 = 0.0f0
   weight_decay::Float32 = 0.0f0
-  cycle_length::Int = 50000
-  lr_step::Vector{Int64} = [1000, 2000, 5000]
-  lr_step_decay::Float32 = 0.1f0
+  scheduler::LRSchedulerConfig = LRSchedulerConfig()
 end
 
 @option struct TrainConfig
