@@ -1,7 +1,8 @@
 module LocalRegNeuralDEExperiments
 
 using Configurations, Dates, Formatting, FLoops, JLSO, LocalRegNeuralDE, Lux, MLUtils,
-      NNlib, OneHotArrays, Optimisers, OrdinaryDiffEq, Setfield, Statistics, Zygote, Wandb
+      NNlib, OneHotArrays, Optimisers, OrdinaryDiffEq, SciMLSensitivity, Setfield,
+      Statistics, Zygote, Wandb
 using Lux: Training
 
 include("config.jl")

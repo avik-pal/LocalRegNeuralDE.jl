@@ -89,25 +89,35 @@ end
 
 function construct(expt::ExperimentConfig, cfg::ModelConfig)
   if cfg.model_type == "mlp"
-    hsize = cfg.mlp_hidden_state_size
-    hsize_next = hsize + cfg.mlp_time_dependent
-    insize = prod(cfg.image_size) * cfg.in_channels
-    layers = Lux.AbstractExplicitLayer[Dense(insize + cfg.mlp_time_dependent => hsize,
-                                             tanh)]
-    for i in 1:(cfg.mlp_num_hidden_layers - 1)
-      push!(layers, Dense(hsize_next => hsize, tanh))
-    end
-    push!(layers, Dense(hsize_next => insize))
-    model = (cfg.mlp_time_dependent ? TDChain : identity)(Chain(layers...))
-
-    return Chain(; flatten=FlattenLayer(),
-                 neural_ode=NeuralODE(model; solver=_ode_solver(cfg.solver.ode_solver),
-                                      save_everystep=false, reltol=cfg.solver.reltol,
-                                      abstol=cfg.solver.abstol, save_start=false,
-                                      regularize=Symbol(cfg.regularize), maxiters=10_000),
-                 sol_to_arr=WrappedFunction(diffeqsol_to_array),
-                 classifier=Dense(insize * cfg.in_channels => cfg.num_classes))
+    return _construct_mlp(expt, cfg)
+  elseif cfg.model_type == "time_series"
+    return _construct_time_series(expt, cfg)
   end
 
   throw(ArgumentError("unknown ModelConfig."))
+end
+
+function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig)
+  hsize = cfg.mlp_hidden_state_size
+  hsize_next = hsize + cfg.mlp_time_dependent
+  insize = prod(cfg.image_size) * cfg.in_channels
+  layers = Lux.AbstractExplicitLayer[Dense(insize + cfg.mlp_time_dependent => hsize, tanh)]
+  for i in 1:(cfg.mlp_num_hidden_layers - 1)
+    push!(layers, Dense(hsize_next => hsize, tanh))
+  end
+  push!(layers, Dense(hsize_next => insize))
+  model = (cfg.mlp_time_dependent ? TDChain : identity)(Chain(layers...))
+
+  return Chain(; flatten=FlattenLayer(),
+               neural_ode=NeuralODE(model; solver=_ode_solver(cfg.solver.ode_solver),
+                                    reltol=cfg.solver.reltol, abstol=cfg.solver.abstol,
+                                    save_start=false, regularize=Symbol(cfg.regularize),
+                                    maxiters=10_000,
+                                    sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())),
+               sol_to_arr=WrappedFunction(diffeqsol_to_array),
+               classifier=Dense(insize * cfg.in_channels => cfg.num_classes))
+end
+
+function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig)
+  error("Not yet implemented.")
 end

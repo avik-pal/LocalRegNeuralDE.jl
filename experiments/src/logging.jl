@@ -164,11 +164,11 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
 
   progress = ProgressMeter(eval_length,
                            (batch_time, data_time, fwd_time, ce_loss, reg_val, loss, nfe,
-                            top1, top5, residual), "Test:")
+                            top1, top5), "Test:")
 
   eval_logger = (progress=progress,
                  avg_meters=(; batch_time, data_time, fwd_time, loss, ce_loss, reg_val,
-                             residual, top1, top5, nfe))
+                             top1, top5, nfe))
 
   return (csv_loggers=(; train=csv_logger_train, eval=csv_logger_eval),
           wandb_logger=wandb_logger,

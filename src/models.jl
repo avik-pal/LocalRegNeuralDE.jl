@@ -12,7 +12,7 @@ struct NeuralODE{R, M <: Lux.AbstractExplicitLayer, So, Se, T, K} <:
   kwargs::K
 
   function NeuralODE(model::Lux.AbstractExplicitLayer; solver=Tsit5(),
-                     sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()),
+                     sensealg=QuadratureAdjoint(; autojacvec=ZygoteVJP()),
                      tspan=(0.0f0, 1.0f0), regularize::Union{Bool, Symbol}=true,
                      maxiters::Int=1000, kwargs...)
     if regularize isa Bool
@@ -56,39 +56,35 @@ function _solve_neuralode_generic(n::NeuralODE, x::AbstractArray, ps, st::NamedT
   return sol, st_, dudt
 end
 
-@generated function (n::NeuralODE{T})(x::AbstractArray, ps, st) where {T}
-  calls = []
-  if T == :none
-    push!(calls, :(rng = st.rng; saveat = []))
-  else
-    push!(calls, :(rng = Lux.replicate(st.rng)))
-    if T == :unbiased
-      push!(calls, :((t0, t2) = n.tspan;
-                     t1 = rand(rng, eltype(t2)) * (t2 - t0) + t0;
-                     saveat = [t0, t1, t2]))
-    else
-      push!(calls, :(saveat = []))
-    end
-  end
+function (n::NeuralODE{:none})(x, ps, st)
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, [n.tspan[2]])
+  return sol, (; model=st_, nfe=_get_destats(sol), reg_val=0.0f0, st.rng)
+end
 
-  push!(calls, :((sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat)))
-  if T == :none
-    push!(calls, :(reg_val = zero(_eltype(x)); nfe = sol.destats.nf))
-  else
-    if T == :biased
-      push!(calls, :(t1 = rand(rng, sol.t)))
-    end
-    push!(calls,
-          :(integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
-                                         n.kwargs...);
-            (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps);
-            nfe = sol.destats.nf + nf2))
-  end
+function (n::NeuralODE{:unbiased})(x, ps, st)
+  rng = Lux.replicate(st.rng)
+  (t0, t2) = n.tspan
+  t1 = rand(rng, eltype(t2)) * (t2 - t0) + t0
+  saveat = [t1, t2]
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat)
+  integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
+                               n.kwargs...)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  nfe = sol.destats.nf + nf2
 
-  push!(calls, :(st = (; model=st_, nfe, reg_val, rng)))
-  push!(calls, :(return sol, st))
+  return sol, (; model=st_, nfe, reg_val, rng)
+end
 
-  return Expr(:block, calls...)
+function (n::NeuralODE{:biased})(x, ps, st)
+  rng = Lux.replicate(st.rng)
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, [])
+  t1 = rand(rng, sol.t)
+  integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
+                               n.kwargs...)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  nfe = sol.destats.nf + nf2
+
+  return sol, (; model=st_, nfe, reg_val, rng)
 end
 
 # Time Dependent Chain

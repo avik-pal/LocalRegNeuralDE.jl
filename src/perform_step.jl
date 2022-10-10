@@ -24,10 +24,10 @@ function _perform_step(integrator, cache::Tsit5ConstantCache, p)
             btilde5 * k5 +
             btilde6 * k6 +
             btilde7 * k7)
-  EEst = sum(abs2,
-             _calculate_residuals(utilde, uprev, u, integrator.opts.abstol,
-                                  integrator.opts.reltol))
-  return u, EEst * dt, 6, dt
+  EEst = sqrt(sum(abs2,
+                  _calculate_residuals(utilde, uprev, u, integrator.opts.abstol,
+                                       integrator.opts.reltol)) / length(u))
+  return u, EEst * dt, 6 + integrator.sol.destats.nf, dt
 end
 
 @inline function _calculate_residuals(ũ, u₀, u₁, alpha, rho)

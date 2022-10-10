@@ -1,6 +1,6 @@
 using LocalRegNeuralDE, LocalRegNeuralDEExperiments
-using ComponentArrays, Lux, MLDatasets, MLUtils, OneHotArrays, Random, Setfield,
-      SimpleConfig, Statistics, Wandb
+using ComponentArrays, CUDA, Lux, MLDatasets, MLUtils, OneHotArrays, Optimisers, Random,
+      Setfield, SimpleConfig, Statistics, Wandb
 using Lux: Training
 
 function get_dataloaders(; augment, data_root, eval_batchsize, train_batchsize)
@@ -12,7 +12,7 @@ function get_dataloaders(; augment, data_root, eval_batchsize, train_batchsize)
   eval_dataset = MNIST(Float32, :test)
   eval_iter = dataloader(unsqueeze(eval_dataset.features; dims=3),
                          onehotbatch(eval_dataset.targets, 0:9), eval_batchsize, true,
-                         false, true)
+                         false, false)
 
   return train_iter, eval_iter
 end
@@ -32,8 +32,13 @@ function main(config_name::String, cfg::ExperimentConfig)
 
   opt, sched = construct(cfg, cfg.optimizer)
 
-  tstate = Training.TrainState(rng, model, opt; transform_variables=gpu)
-  @set! tstate.parameters = tstate.parameters |> cpu |> ComponentArray |> gpu
+  # Manually create TrainState since ComponentArrays conversion doesn't smoothly work by
+  # default
+  ps, st = Lux.setup(rng, model)
+  ps = ps |> ComponentArray |> gpu
+  st = st |> gpu
+  opt_state = Optimisers.setup(opt, ps)
+  tstate = Training.TrainState(model, ps, st, opt_state, 0)
 
   vjp_rule = Training.ZygoteVJP()
 
@@ -47,6 +52,7 @@ function main(config_name::String, cfg::ExperimentConfig)
 
   expt_name = ("config-$(config_name)_regularizer-$(cfg.model.regularize)" *
                "_seed-$(cfg.seed)_id-$(cfg.train.expt_id)")
+  @info expt_name
 
   ckpt_dir = joinpath(cfg.train.expt_subdir, cfg.train.checkpoint_dir, expt_name)
   log_dir = joinpath(cfg.train.expt_subdir, cfg.train.log_dir, expt_name)
@@ -65,9 +71,9 @@ function main(config_name::String, cfg::ExperimentConfig)
     initial_step = 1
   end
 
-  loggers = DEQExperiments.create_logger(log_dir, cfg.train.total_steps - initial_step,
-                                         cfg.train.total_steps - initial_step, expt_name,
-                                         flatten_configuration(cfg))
+  loggers = create_logger(log_dir, cfg.train.total_steps - initial_step,
+                          cfg.train.total_steps - initial_step, expt_name,
+                          flatten_configuration(cfg))
 
   best_test_accuracy = 0
 
@@ -136,8 +142,8 @@ function main(config_name::String, cfg::ExperimentConfig)
 
         acc1 = accuracy(cpu(stats.y_pred), cpu(y))
 
-        loggers.progress_loggers.eval.avg_meters.batch_time(dtime + fwd_time, bsize)
-        loggers.progress_loggers.eval.avg_meters.data_time(dtime, bsize)
+        loggers.progress_loggers.eval.avg_meters.batch_time(data_time + fwd_time, bsize)
+        loggers.progress_loggers.eval.avg_meters.data_time(data_time, bsize)
         loggers.progress_loggers.eval.avg_meters.fwd_time(fwd_time, bsize)
         loggers.progress_loggers.eval.avg_meters.loss(loss, bsize)
         loggers.progress_loggers.eval.avg_meters.ce_loss(stats.ce_loss, bsize)
@@ -167,6 +173,8 @@ function main(config_name::String, cfg::ExperimentConfig)
       save_checkpoint(ckpt; is_best, filename=joinpath(ckpt_dir, "model_$(step).jlso"))
     end
   end
+
+  Wandb.close(loggers.wandb_logger)
 
   return nothing
 end
