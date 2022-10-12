@@ -11,7 +11,7 @@ end
 end
 
 @option struct ModelConfig
-  model_type::String = "mlp"  # Options: `mlp`
+  model_type::String = "mlp"  # Options: `mlp`, `time_series`
   regularize::String = "unbiased"
   image_size::Vector{Int64} = [32, 32]
   in_channels::Int = 3
@@ -23,6 +23,12 @@ end
   mlp_hidden_state_size::Int = 100
   mlp_num_hidden_layers::Int = 1
   mlp_time_dependent::Bool = true
+
+  # time_series
+  ts_in_dims::Int = 37
+  ts_hidden_dims::Int = 40
+  ts_latent_dims::Int = 50
+  ts_node_dims::Int = 20
 end
 
 @option struct LRSchedulerConfig

@@ -91,12 +91,22 @@ mean_absolute_error(y_pred, y) = mean(abs, y_pred .- y)
 
 mean_squared_error(y_pred, y) = mean(abs2, y_pred .- y)
 
+function log_likelihood_loss(∇pred, mask)
+  σ_ = 0.01f0
+  sample_likelihood = -(∇pred .^ 2) ./ (2 * σ_^2) .- log(σ_) .- log(Float32(2π)) ./ 2
+  return vec(sum(sample_likelihood; dims=(1, 2)) ./ sum(mask; dims=(1, 2)))
+end
+
+# Holds only for a Standard Gaussian Prior
+kl_divergence(μ, logσ²) = vec(mean(exp.(logσ²) .+ (μ .^ 2) .- 1 .- logσ²; dims=1) ./ 2)
+
 # Augment the Training Step
 function run_training_step(::Training.ZygoteVJP, objective_function, data,
-                           ts::Training.TrainState, w_reg)
+                           ts::Training.TrainState, args...)
   t = time()
   (loss, st, stats), back = Zygote.pullback(ps -> objective_function(ts.model, ps,
-                                                                     ts.states, data, w_reg),
+                                                                     ts.states, data,
+                                                                     args...),
                                             ts.parameters)
   fwd_time = time() - t
 
@@ -126,14 +136,33 @@ function warmup_model(loss_function, model, ps, st, cfg::ExperimentConfig; trans
   return nothing
 end
 
-function dataloader(X, Y, batchsize, shuffle::Bool, partial::Bool, repeat_forever::Bool)
-  _data = BatchView((shuffle ? shuffleobs((X, Y)) : (X, Y)); batchsize, partial,
-                    collate=true)
+_unbatch_data(x::AbstractArray{T, N}) where {T, N} = unsqueeze(selectdim(x, N, 1); dims=N)
+
+function warmup_model(loss_function, model, ps, st, cfg::ExperimentConfig, data;
+                      transform_input)
+  data = data .|> _unbatch_data .|> transform_input
+
+  @info "model warmup started"
+  loss_function(model, ps, st, (data[1], data[2], data[5]), (1.0f0, 1.0f0))
+  @info "forward pass warmup completed"
+  Zygote.gradient(p -> first(loss_function(model, ps, st, (data[1], data[2], data[5]),
+                                           (1.0f0, 1.0f0))), ps)
+  @info "backward pass warmup completed"
+
+  return nothing
+end
+
+function dataloader(data, batchsize, shuffle::Bool, partial::Bool, repeat_forever::Bool)
+  _data = BatchView((shuffle ? shuffleobs(data) : data); batchsize, partial, collate=true)
 
   _iter = MLUtils.eachobsparallel(_data; executor=FLoops.ThreadedEx(), buffer=true,
                                   channelsize=max(1, Threads.nthreads() ÷ 2))
 
   return repeat_forever ? Iterators.cycle(_iter) : _iter
+end
+
+function dataloader(X, Y, batchsize, shuffle::Bool, partial::Bool, repeat_forever::Bool)
+  return dataloader((X, Y), batchsize, shuffle, partial, repeat_forever)
 end
 
 # Checkpointing
