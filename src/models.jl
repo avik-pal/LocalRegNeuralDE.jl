@@ -12,13 +12,16 @@ struct NeuralODE{R, M <: Lux.AbstractExplicitLayer, So, Se, T, K} <:
   kwargs::K
 
   function NeuralODE(model::Lux.AbstractExplicitLayer; solver=Tsit5(),
-                     sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()),
+                     sensealg=QuadratureAdjoint(; autojacvec=ZygoteVJP()),
                      tspan=(0.0f0, 1.0f0), regularize::Union{Bool, Symbol}=true,
                      maxiters::Int=1000, kwargs...)
     if regularize isa Bool
       regularize = regularize ? :split_mode : :none
     end
     _check_valid_regularize(regularize)
+    if :saveat in keys(kwargs)
+      throw(ArgumentError(":saveat is currently not supported in NeuralODE"))
+    end
     return new{regularize, typeof(model), typeof(solver), typeof(sensealg), typeof(tspan),
                typeof(kwargs)}(model, solver, sensealg, tspan, maxiters, kwargs)
   end
@@ -30,20 +33,6 @@ function Lux.initialstates(rng::AbstractRNG, layer::NeuralODE)
           rng=Lux.replicate(rng))
 end
 
-function (n::NeuralODE{:none})(x::AbstractArray, ps, st)
-  st_ = st.model
-  function dudt(u, p, t)
-    u_, st_ = Lux.apply(n.model, ArrayAndTime(u, t), p, st_)
-    return get_array(u_)
-  end
-
-  prob = ODEProblem(dudt, x, n.tspan, ps)
-  sol = solve(prob, n.solver; n.sensealg, n.maxiters, n.kwargs...)
-  st = (model=st_, nfe=sol.destats.nf, reg_val=zero(_eltype(x)), rng=st.rng)
-
-  return sol, st
-end
-
 function _get_integrator(sol, t, dudt, tspan, ps, solver, sensealg; kwargs...)
   u = sol(t)
   prob = ODEProblem(dudt, u, tspan, ps)
@@ -53,51 +42,49 @@ end
 
 CRC.@non_differentiable _get_integrator(::Any...)
 
-@views function (n::NeuralODE{:unbiased})(x::AbstractArray, ps, st)
-  rng = Lux.replicate(st.rng)
-
+function _solve_neuralode_generic(n::NeuralODE, x::AbstractArray, ps, st::NamedTuple,
+                                  saveat)
   st_ = st.model
   function dudt(u, p, t)
     u_, st_ = Lux.apply(n.model, ArrayAndTime(u, t), p, st_)
     return get_array(u_)
   end
 
-  t0, t2 = n.tspan
-  t1 = rand(rng, eltype(t2)) * (t2 - t0) + t0  # Uniformly sample in [t0, t2]
-
   prob = ODEProblem(dudt, x, n.tspan, ps)
-  sol = solve(prob, n.solver; n.sensealg, n.maxiters, saveat=[t1, t2], n.kwargs...)
+  sol = solve(prob, n.solver; n.sensealg, n.maxiters, saveat, n.kwargs...)
 
-  integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
-                               n.kwargs...)
-  _, reg_val, nf2, _ = _perform_step(integrator, integrator.cache, ps)
-
-  st = (; model=st_, nfe=sol.destats.nf + nf2, reg_val, rng)
-
-  return sol, st
+  return sol, st_, dudt
 end
 
-@views function (n::NeuralODE{:biased})(x::AbstractArray, ps, st)
+function (n::NeuralODE{:none})(x, ps, st)
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, [n.tspan[2]])
+  return sol, (; model=st_, nfe=_get_destats(sol), reg_val=0.0f0, st.rng)
+end
+
+function (n::NeuralODE{:unbiased})(x, ps, st)
   rng = Lux.replicate(st.rng)
-
-  st_ = st.model
-  function dudt(u, p, t)
-    u_, st_ = Lux.apply(n.model, ArrayAndTime(u, t), p, st_)
-    return get_array(u_)
-  end
-
-  prob = ODEProblem(dudt, x, n.tspan, ps)
-  sol = solve(prob, n.solver; n.sensealg, n.maxiters, n.kwargs...)
-
-  t1 = rand(rng, sol.t)
-
+  (t0, t2) = n.tspan
+  t1 = rand(rng, eltype(t2)) * (t2 - t0) + t0
+  saveat = [t1, t2]
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat)
   integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
                                n.kwargs...)
-  _, reg_val, nf2, _ = _perform_step(integrator, integrator.cache, ps)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  nfe = sol.destats.nf + nf2
 
-  st = (; model=st_, nfe=sol.destats.nf + nf2, reg_val, rng)
+  return sol, (; model=st_, nfe, reg_val, rng)
+end
 
-  return sol, st
+function (n::NeuralODE{:biased})(x, ps, st)
+  rng = Lux.replicate(st.rng)
+  (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, [])
+  t1 = rand(rng, sol.t)
+  integrator = _get_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg;
+                               n.kwargs...)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  nfe = sol.destats.nf + nf2
+
+  return sol, (; model=st_, nfe, reg_val, rng)
 end
 
 # Time Dependent Chain

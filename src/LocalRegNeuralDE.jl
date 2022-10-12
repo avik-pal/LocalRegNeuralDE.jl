@@ -1,7 +1,7 @@
 module LocalRegNeuralDE
 
-using DiffEqBase, DiffEqCallbacks, ChainRulesCore, CUDA, ComponentArrays, Lux,
-      OrdinaryDiffEq, Random, SciMLSensitivity, Setfield, UnPack, Zygote
+using ChainRulesCore, CUDA, ComponentArrays, DiffEqBase, DiffEqCallbacks, Functors, Lux,
+      OrdinaryDiffEq, Random, SciMLSensitivity, Setfield, Tracker, UnPack, Zygote
 import ChainRulesCore as CRC
 
 include("perform_step.jl")

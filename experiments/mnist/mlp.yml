@@ -1,0 +1,34 @@
+seed: 0
+
+model:
+  regularize: "none"
+  image_size:
+    - 28
+    - 28
+  num_classes: 10
+  in_channels: 1
+  solver:
+    ode_solver: "tsit5"
+    abstol: 1.4e-8
+    reltol: 1.4e-8
+
+loss:
+  w_reg_start: 5.0
+  w_reg_end: 1.0
+  w_reg_decay: "exponential"
+
+dataset:
+  augment: False
+  eval_batchsize: 512
+  train_batchsize: 512
+
+train:
+  total_steps: 7500
+  print_frequency: 100
+  evaluate_every: 500
+
+optimizer:
+  optimizer: "adam"
+  learning_rate: 0.001
+  scheduler:
+    lr_scheduler: "constant"
