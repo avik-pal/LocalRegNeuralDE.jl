@@ -5,6 +5,7 @@ _eltype(x::AbstractArray{T}) where {T} = T
 _eltype(x::Tuple) = _eltype(first(x))
 
 _get_destats(sol::ODESolution) = sol.destats.nf
+_get_destats(sol::ODESolution, x::Symbol) = getproperty(sol.destats, x)
 _get_destats(sol::TrackedArray) = _get_destats(Tracker.data(sol))
 
 # Array and Time Container for Dispatch
@@ -21,17 +22,17 @@ function Lux.apply(l::Lux.AbstractExplicitLayer, x::ArrayAndTime, ps, st::NamedT
   return ArrayAndTime(y, get_scalar(x)), st_
 end
 
-struct _CorrectedODESolution{U}
+struct _CorrectedDESolution{U}
   u::U
 end
 
-Base.ndims(sol::_CorrectedODESolution) = ndims(first(sol.u)) + 1
+Base.ndims(sol::_CorrectedDESolution) = ndims(first(sol.u)) + 1
 
-function _CorrectedODESolution(sol::ODESolution, saveat, t1)
-  return _CorrectedODESolution(sol.u[t1 .!= sol.t])
+function _CorrectedDESolution(sol::ODESolution, saveat, t1)
+  return _CorrectedDESolution(sol.u[t1 .!= sol.t])
 end
 
-const _DIFFEQ_SOL_TYPES = Union{ODESolution, _CorrectedODESolution}
+const _DIFFEQ_SOL_TYPES = Union{ODESolution, _CorrectedDESolution, RODESolution}
 
 diffeqsol_to_array(sol::_DIFFEQ_SOL_TYPES) = sol.u[end]
 diffeqsol_to_array(x::ArrayAndTime) = get_array(x)
@@ -68,3 +69,10 @@ _cat(t::Union{<:Tuple, <:AbstractVector}, ::Val{dims}) where {dims} = cat(t...; 
 Tracker.param(ca::ComponentArray) = ComponentArray(Tracker.param(getdata(ca)), getaxes(ca))
 Tracker.param(nt::NamedTuple) = fmap(Tracker.param, nt)
 Base.nextfloat(x::Tracker.TrackedReal) = Tracker.TrackedReal(nextfloat(x.data))
+
+# This is a weird type piracy but is needed to make the NeuralDSDE to work
+function LinearAlgebra.mul!(A::AbstractVector{T}, B::AbstractMatrix{T},
+                            C::AbstractMatrix{T}, b1::Bool, b2::Bool) where {T}
+  LinearAlgebra.mul!(reshape(A, :, 1), B, reshape(C, :, 1), b1, b2)
+  return A
+end

@@ -16,6 +16,8 @@ end
   image_size::Vector{Int64} = [32, 32]
   in_channels::Int = 3
   num_classes::Int = 10
+  sde::Bool = false
+
   # Solver
   solver::SolverConfig = SolverConfig()
 
