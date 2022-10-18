@@ -36,4 +36,3 @@ using Pkg
 pkg"registry add https://github.com/avik-pal/ResearchRegistry"
 pkg"add LocalRegNeuralDE"
 ```
-

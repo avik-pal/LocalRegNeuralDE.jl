@@ -1,6 +1,6 @@
 function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConfig)
   if expt.model.regularize == "none"
-    return function cls_loss_function_no_regularization(model, ps, st, (x, y), w_reg)
+    return function cts_loss_function_no_regularization(model, ps, st, (x, y), w_reg)
       y_pred, st_ = Lux.apply(model, x, ps, st)
       ce_loss = logitcrossentropy(y_pred, y)
       reg_val = zero(ce_loss)
@@ -9,7 +9,7 @@ function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConf
       return (ce_loss, st_, (; y_pred, nfe, ce_loss, reg_val))
     end
   else
-    return function cls_loss_function_with_regularization(model, ps, st, (x, y), w_reg)
+    return function cts_loss_function_with_regularization(model, ps, st, (x, y), w_reg)
       y_pred, st_ = Lux.apply(model, x, ps, st)
       ce_loss = logitcrossentropy(y_pred, y)
       reg_val = st_.neural_ode.reg_val
@@ -20,14 +20,69 @@ function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConf
   end
 end
 
-function construct(expt::ExperimentConfig, cfg::LossConfig)
-  # TODO(@avik-pal): For time series problems (will need a config.jl update)
-  lfn = _get_loss_function_classification(expt, cfg)
+function _get_loss_function_latent_ode(expt::ExperimentConfig, cfg::LossConfig)
+  if expt.model.regularize == "none"
+    return function ts_loss_function_no_regularization(model, ps, st, (data, mask, dt),
+                                                       (w_reg, w_kl))
+      x = vcat(data, mask, dt)
+      y, st_ = Lux.apply(model, x, ps, st)
 
-  sched = if cfg.w_reg_decay == "exponential"
-    ExponentialDecay(cfg.w_reg_start, cfg.w_reg_end, expt.train.total_steps)
+      data_ = data .* mask
+      pred_ = y .* mask
+      ∇pred = pred_ .- data_
+
+      log_likelihood = log_likelihood_loss(∇pred, mask)
+      kl_div = kl_divergence(st_.reparam.μ₀, st_.reparam.logσ²)
+
+      loss = -mean(log_likelihood .- w_kl .* kl_div)
+
+      return (loss, st_,
+              (; neg_log_likelihood=-mean(log_likelihood), kl_div=mean(kl_div), loss,
+               nfe=st_.neural_ode.nfe, reg_val=0.0f0))
+    end
   else
-    Constant(cfg.w_reg_start)
+    return function ts_loss_function_with_regularization(model, ps, st, (data, mask, dt),
+                                                         (w_reg, w_kl))
+      x = vcat(data, mask, dt)
+      y, st_ = Lux.apply(model, x, ps, st)
+
+      data_ = data .* mask
+      pred_ = y .* mask
+      ∇pred = pred_ .- data_
+
+      log_likelihood = log_likelihood_loss(∇pred, mask)
+      kl_div = kl_divergence(st_.reparam.μ₀, st_.reparam.logσ²)
+
+      loss = -mean(log_likelihood .- w_kl .* kl_div) + w_reg * st_.neural_ode.reg_val
+
+      return (loss, st_,
+              (; neg_log_likelihood=-mean(log_likelihood), kl_div=mean(kl_div), loss,
+               nfe=st_.neural_ode.nfe, st_.neural_ode.reg_val))
+    end
+  end
+end
+
+function construct(expt::ExperimentConfig, cfg::LossConfig)
+  if expt.model.model_type == "time_series"
+    lfn = _get_loss_function_latent_ode(expt, cfg)
+  else
+    lfn = _get_loss_function_classification(expt, cfg)
+  end
+
+  sched = if expt.model.model_type != "time_series"
+    if cfg.w_reg_decay == "exponential"
+      ExponentialDecay(cfg.w_reg_start, cfg.w_reg_end, expt.train.total_steps)
+    else
+      Constant(cfg.w_reg_start)
+    end
+  else
+    w_reg = if cfg.w_reg_decay == "exponential"
+      ExponentialDecay(cfg.w_reg_start, cfg.w_reg_end, expt.train.total_steps)
+    else
+      Constant(cfg.w_reg_start)
+    end
+    w_kl = t -> max(0, 1 - 0.99f0^(t - 100))
+    (w_reg, w_kl)
   end
 
   return lfn, sched
@@ -36,6 +91,8 @@ end
 function construct(expt::ExperimentConfig, cfg::OptimizerConfig)
   if cfg.optimizer == "adam"
     opt = Adam(cfg.learning_rate)
+  elseif cfg.optimizer == "adamax"
+    opt = AdaMax(cfg.learning_rate)
   elseif cfg.optimizer == "sgd"
     if cfg.nesterov
       opt = Nesterov(cfg.learning_rate, cfg.momentum)
@@ -46,7 +103,7 @@ function construct(expt::ExperimentConfig, cfg::OptimizerConfig)
     end
   else
     throw(ArgumentError("unknown value for `optimizer` = $(cfg.optimizer). Supported " *
-                        "options are: `adam` and `sgd`."))
+                        "options are: `adam`, `adamax` and `sgd`."))
   end
 
   if cfg.weight_decay != 0
@@ -87,17 +144,17 @@ function _ode_solver(s::String)
   throw(ArgumentError("unknown SolverConfig."))
 end
 
-function construct(expt::ExperimentConfig, cfg::ModelConfig)
+function construct(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
   if cfg.model_type == "mlp"
-    return _construct_mlp(expt, cfg)
+    return _construct_mlp(expt, cfg; kwargs...)
   elseif cfg.model_type == "time_series"
-    return _construct_time_series(expt, cfg)
+    return _construct_time_series(expt, cfg; kwargs...)
   end
 
   throw(ArgumentError("unknown ModelConfig."))
 end
 
-function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig)
+function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
   hsize = cfg.mlp_hidden_state_size
   hsize_next = hsize + cfg.mlp_time_dependent
   insize = prod(cfg.image_size) * cfg.in_channels
@@ -118,6 +175,25 @@ function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig)
                classifier=Dense(insize * cfg.in_channels => cfg.num_classes))
 end
 
-function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig)
-  error("Not yet implemented.")
+function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig; saveat, kwargs...)
+  gru = Recurrence(LatentGRUCell(cfg.ts_in_dims, cfg.ts_hidden_dims, cfg.ts_latent_dims))
+  rec_to_gen = Chain(Dense(2 * cfg.ts_latent_dims => cfg.ts_latent_dims, tanh),
+                     Dense(cfg.ts_latent_dims => 2 * cfg.ts_node_dims))
+  reparam = ReparameterizeLayer()
+  gen_dynamics = Chain(Base.Fix1(broadcast, tanh),
+                       Dense(cfg.ts_node_dims => cfg.ts_hidden_dims, tanh),
+                       Dense(cfg.ts_hidden_dims => cfg.ts_node_dims, tanh),
+                       Dense(cfg.ts_node_dims => cfg.ts_hidden_dims, tanh),
+                       Dense(cfg.ts_hidden_dims => cfg.ts_node_dims, tanh),
+                       Dense(cfg.ts_node_dims => cfg.ts_hidden_dims, tanh),
+                       Dense(cfg.ts_hidden_dims => cfg.ts_node_dims, tanh),
+                       Dense(cfg.ts_node_dims => cfg.ts_hidden_dims, tanh),
+                       Dense(cfg.ts_hidden_dims => cfg.ts_node_dims, tanh))
+  neural_ode = NeuralODE(gen_dynamics; solver=_ode_solver(cfg.solver.ode_solver),
+                         reltol=cfg.solver.reltol, abstol=cfg.solver.abstol,
+                         regularize=Symbol(cfg.regularize), maxiters=10_000, saveat,
+                         sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
+  diffeqsol_to_array = WrappedFunction(diffeqsol_to_timeseries)
+  gen_to_data = Dense(cfg.ts_node_dims, cfg.ts_in_dims)
+  return Chain(; gru, rec_to_gen, reparam, neural_ode, diffeqsol_to_array, gen_to_data)
 end

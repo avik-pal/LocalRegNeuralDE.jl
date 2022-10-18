@@ -1,0 +1,7 @@
+[physionet]
+git-tree-sha1 = "efbf52ca2a04cd1736370e094a137f5f22766ddc"
+lazy = true
+
+    [[physionet.download]]
+    url = "https://avik-pal.github.io/extras/localregneuralde/physionet.tar.gz"
+    sha256 = "a34dd84ed4c1b7bc3e48b23f9aa2d8782d7656ee04ba829369792589de745ef9"

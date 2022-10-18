@@ -85,7 +85,7 @@ function Base.close(csv::CSVLogger)
 end
 
 function create_logger(base_dir::String, train_length::Int, eval_length::Int,
-                       expt_name::String, config::Dict)
+                       expt_name::String, config::Dict; latent_ode::Bool=false)
   if !isdir(base_dir)
     @warn "$(base_dir) doesn't exist. Creating a directory."
     mkpath(base_dir)
@@ -105,12 +105,11 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     "Forward Pass Time",
     "Backward Pass Time",
     "Optimizer Time",
-    "Cross Entropy Loss",
+    (latent_ode ? ["Neg Log Likelihood", "KL Divergence"] : ["Cross Entropy Loss"])...,
     "Regularize Value",
     "Net Loss",
     "NFE",
-    "Accuracy (Top 1)",
-    "Accuracy (Top 5)",
+    (latent_ode ? [] : ["Accuracy (Top 1)", "Accuracy (Top 5)"])...,
   ]
   train_loggable_dict(args...) = Dict(zip(.*(("Train/",), train_csv_header), args))
   csv_logger_train = CSVLogger(joinpath(base_dir, "results_train.csv"), train_csv_header)
@@ -120,55 +119,60 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     "Batch Time",
     "Data Time",
     "Forward Pass Time",
-    "Cross Entropy Loss",
+    (latent_ode ? ["Neg Log Likelihood", "KL Divergence"] : ["Cross Entropy Loss"])...,
     "Regularize Value",
     "Net Loss",
     "NFE",
-    "Accuracy (Top 1)",
-    "Accuracy (Top 5)",
+    (latent_ode ? [] : ["Accuracy (Top 1)", "Accuracy (Top 5)"])...,
   ]
   eval_loggable_dict(args...) = Dict(zip(.*(("Eval/",), eval_csv_header), args))
   csv_logger_eval = CSVLogger(joinpath(base_dir, "results_eval.csv"), eval_csv_header)
 
   # Train Logger
-  batch_time = AverageMeter("Batch Time", "6.3f")
-  data_time = AverageMeter("Data Time", "6.3f")
-  fwd_time = AverageMeter("Forward Pass Time", "6.3f")
-  bwd_time = AverageMeter("Backward Pass Time", "6.3f")
-  opt_time = AverageMeter("Optimizer Time", "6.3f")
-  loss = AverageMeter("Net Loss", "6.3f")
-  ce_loss = AverageMeter("Cross Entropy Loss", "6.3e")
-  reg_val = AverageMeter("Regularize Value", "6.3e")
-  top1 = AverageMeter("Accuracy (@1)", "3.2f")
-  top5 = AverageMeter("Accuracy (@5)", "3.2f")
-  nfe = AverageMeter("NFE", "3.2f")
+  _tloggers = [
+    :batch_time => AverageMeter("Batch Time", "6.3f"),
+    :data_time => AverageMeter("Data Time", "6.3f"),
+    :fwd_time => AverageMeter("Forward Pass Time", "6.3f"),
+    :bwd_time => AverageMeter("Backward Pass Time", "6.3f"),
+    :opt_time => AverageMeter("Optimizer Time", "6.3f"),
+    :loss => AverageMeter("Net Loss", "6.3f"),
+    (latent_ode ?
+     [
+       :neg_ll_loss => AverageMeter("Neg Log Likelihood", "6.3e"),
+       :kl_div => AverageMeter("KL Divergence", "6.3e"),
+     ] : [:ce_loss => AverageMeter("Cross Entropy Loss", "6.3e")])...,
+    :reg_val => AverageMeter("Regularize Value", "6.3e"),
+    (latent_ode ? [] :
+     [
+       :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
+       :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
+     ])...,
+    :nfe => AverageMeter("NFE", "3.2f"),
+  ]
 
-  progress = ProgressMeter(train_length,
-                           (batch_time, data_time, fwd_time, bwd_time, opt_time, ce_loss,
-                            reg_val, loss, nfe, top1, top5), "Train:")
+  progress = ProgressMeter(train_length, Tuple(last.(_tloggers)), "Train:")
 
-  train_logger = (progress=progress,
-                  avg_meters=(; batch_time, data_time, loss, ce_loss, reg_val, top1, top5,
-                              nfe, fwd_time, bwd_time, opt_time))
+  train_logger = (progress=progress, avg_meters=(; _tloggers...))
 
   # Eval Logger
-  batch_time = AverageMeter("Batch Time", "6.3f")
-  data_time = AverageMeter("Data Time", "6.3f")
-  fwd_time = AverageMeter("Forward Time", "6.3f")
-  loss = AverageMeter("Net Loss", "6.3f")
-  ce_loss = AverageMeter("Cross Entropy Loss", "6.3e")
-  reg_val = AverageMeter("Regularize Value", "6.3e")
-  top1 = AverageMeter("Accuracy (@1)", "3.2f")
-  top5 = AverageMeter("Accuracy (@5)", "3.2f")
-  nfe = AverageMeter("NFE", "3.2f")
+  _tloggers = [
+    :batch_time => AverageMeter("Batch Time", "6.3f"),
+    :data_time => AverageMeter("Data Time", "6.3f"),
+    :fwd_time => AverageMeter("Forward Time", "6.3f"),
+    :loss => AverageMeter("Net Loss", "6.3f"),
+    (latent_ode ? [] : [:ce_loss => AverageMeter("Cross Entropy Loss", "6.3e")])...,
+    :reg_val => AverageMeter("Regularize Value", "6.3e"),
+    (latent_ode ? [] :
+     [
+       :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
+       :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
+     ])...,
+    :nfe => AverageMeter("NFE", "3.2f"),
+  ]
 
-  progress = ProgressMeter(eval_length,
-                           (batch_time, data_time, fwd_time, ce_loss, reg_val, loss, nfe,
-                            top1, top5), "Test:")
+  progress = ProgressMeter(eval_length, Tuple(last.(_tloggers)), "Test:")
 
-  eval_logger = (progress=progress,
-                 avg_meters=(; batch_time, data_time, fwd_time, loss, ce_loss, reg_val,
-                             top1, top5, nfe))
+  eval_logger = (progress=progress, avg_meters=(; _tloggers...))
 
   return (csv_loggers=(; train=csv_logger_train, eval=csv_logger_eval),
           wandb_logger=wandb_logger,
