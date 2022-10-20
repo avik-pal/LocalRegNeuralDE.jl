@@ -9,9 +9,9 @@ struct NeuralDSDE{R, Dr <: AbstractExplicitLayer, Di <: AbstractExplicitLayer, S
   kwargs::K
 
   function NeuralDSDE(drift::AbstractExplicitLayer, diffusion::AbstractExplicitLayer;
-                      solver=RKMilCommute(),
-                      sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP(),
-                                                    noisemixing=true), tspan=(0.0f0, 1.0f0),
+                      solver=SOSRI(),
+                      sensealg=SensitivityADPassThrough(),
+                      tspan=(0.0f0, 1.0f0),
                       regularize::Symbol=:unbiased, maxiters::Int=1000, kwargs...)
     _check_valid_regularize(regularize)
     return new{regularize, typeof(drift), typeof(diffusion), typeof(solver),

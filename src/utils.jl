@@ -70,9 +70,17 @@ Tracker.param(ca::ComponentArray) = ComponentArray(Tracker.param(getdata(ca)), g
 Tracker.param(nt::NamedTuple) = fmap(Tracker.param, nt)
 Base.nextfloat(x::Tracker.TrackedReal) = Tracker.TrackedReal(nextfloat(x.data))
 
+Tracker.extract_grad!(ca::ComponentArray) = Tracker.extract_grad!(getdata(ca))
+
 # This is a weird type piracy but is needed to make the NeuralDSDE to work
 function LinearAlgebra.mul!(A::AbstractVector{T}, B::AbstractMatrix{T},
                             C::AbstractMatrix{T}, b1::Bool, b2::Bool) where {T}
   LinearAlgebra.mul!(reshape(A, :, 1), B, reshape(C, :, 1), b1, b2)
   return A
+end
+
+function Base.setproperty!(x::Tracker.Tracked{Z}, f::Symbol,
+                           v::AbstractVector) where {Z <: SubArray}
+  getproperty(x, f) = @view v[:]
+  return getproperty(x, f)
 end
