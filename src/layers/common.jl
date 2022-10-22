@@ -75,3 +75,18 @@ end
   μ₀ = x[1:latent_dim, :]
   return μ₀, μ₀, μ₀, rng
 end
+
+# Augmentation Layer
+struct AugmenterLayer{idx, A <: AbstractExplicitLayer} <:
+       AbstractExplicitContainerLayer{(:augment,)}
+  augment::A
+end
+
+function AugmenterLayer(augment::A, idx) where {A <: AbstractExplicitLayer}
+  return AugmenterLayer{idx, A}(augment)
+end
+
+function (a::AugmenterLayer{idx})(x, ps, st) where {idx}
+  x_, st_ = Lux.apply(a.augment, x, ps, st)
+  return _cat(x, x_, Val(idx)), st_
+end

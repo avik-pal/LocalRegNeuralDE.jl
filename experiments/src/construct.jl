@@ -103,6 +103,8 @@ end
 function construct(expt::ExperimentConfig, cfg::OptimizerConfig)
   if cfg.optimizer == "adam"
     opt = Adam(cfg.learning_rate)
+  elseif cfg.optimizer == "adamw"
+    opt = AdamW(cfg.learning_rate)
   elseif cfg.optimizer == "adamax"
     opt = AdaMax(cfg.learning_rate)
   elseif cfg.optimizer == "sgd"
@@ -163,6 +165,8 @@ function construct(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
     return _construct_mlp_sde(expt, cfg; kwargs...)
   elseif cfg.model_type == "time_series"
     return _construct_time_series(expt, cfg; kwargs...)
+  elseif cfg.model_type == "cifar10_cnn"
+    return _construct_cifar10_cnn(expt, cfg; kwargs...)
   end
 
   throw(ArgumentError("unknown ModelConfig."))
@@ -196,9 +200,23 @@ function _construct_mlp_sde(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
                                       abstol=cfg.solver.abstol, save_start=false,
                                       regularize=Symbol(cfg.regularize), maxiters=10_000,
                                       sensealg=InterpolatingAdjoint(;
-                                                                     autojacvec=ZygoteVJP())),
+                                                                    autojacvec=ZygoteVJP())),
                sol_to_arr=WrappedFunction(diffeqsol_to_array),
                classifier=Dense(32 => cfg.num_classes))
+end
+
+function _construct_cifar10_cnn(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
+  node_core = TDChain(Chain(Chain(Conv((3, 3), 9 => 64; pad=(1, 1)), BatchNorm(64, tanh)),
+                            Chain(Conv((3, 3), 65 => 64; pad=(1, 1)), BatchNorm(64, tanh)),
+                            Conv((3, 3), 65 => 8; pad=(1, 1)); disable_optimizations=true))
+  neural_ode = NeuralODE(node_core; solver=Tsit5(), cfg.solver.reltol, cfg.solver.abstol,
+                         save_start=false, regularize=Symbol(cfg.regularize),
+                         maxiters=10_000,
+                         sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
+  return Chain(; augment=AugmenterLayer(Conv((3, 3), 3 => 5; pad=(1, 1)), 3),
+               bn=BatchNorm(8), neural_ode, sol_to_arr=WrappedFunction(diffeqsol_to_array),
+               classifier=Chain(Conv((3, 3), 8 => 1; pad=(1, 1)), FlattenLayer(),
+                                Dense(32 * 32 => 10)))
 end
 
 function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig; saveat, kwargs...)
