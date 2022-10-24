@@ -1,0 +1,32 @@
+seed: 0
+
+model:
+  regularize: "unbiased"
+  model_type: "time_series"
+  regularize_type: "stiffness_estimate"
+  solver:
+    ode_solver: "tsit5"
+    abstol: 1.4e-8
+    reltol: 1.4e-8
+
+loss:
+  w_reg_start: 10.0
+  w_reg_end: 10.0
+  w_reg_decay: "constant"
+
+dataset:
+  augment: False
+  eval_batchsize: 512
+  train_batchsize: 512
+
+train:
+  total_steps: 3000
+  print_frequency: 10
+  evaluate_every: 100
+
+optimizer:
+  optimizer: "adamax"
+  learning_rate: 0.01
+  scheduler:
+    lr_scheduler: "inverse"
+    inverse_decay_factor: 0.00001

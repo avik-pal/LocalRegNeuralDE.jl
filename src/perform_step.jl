@@ -1,4 +1,4 @@
-function _perform_step(integrator, cache::Tsit5ConstantCache, p)
+function _perform_step(integrator, cache::Tsit5ConstantCache, p, reg_type::Val)
   @unpack t, dt, uprev, u, f = integrator
   @unpack c1, c2, c3, c4, c5, c6 = cache
   @unpack a21, a31, a32, a41, a42, a43, a51, a52, a53, a54, a61, a62, a63, a64, a65 = cache
@@ -22,10 +22,23 @@ function _perform_step(integrator, cache::Tsit5ConstantCache, p)
             btilde5 * k5 +
             btilde6 * k6 +
             btilde7 * k7)
-  EEst = sqrt(sum(abs2,
-                  _calculate_residuals(utilde, uprev, u, integrator.opts.abstol,
-                                       integrator.opts.reltol)) / length(u))
-  return u, EEst * dt, 6 + integrator.sol.destats.nf, dt
+  reg_val = _compute_regularization_value(cache, reg_type, utilde, uprev, u,
+                                          integrator.opts.abstol, integrator.opts.reltol,
+                                          k7, k6, u, g6, dt)
+  return u, reg_val, 6 + integrator.sol.destats.nf, dt
+end
+
+function _compute_regularization_value(::Tsit5ConstantCache, ::Val{:error_estimate}, utilde,
+                                       uprev, u, abstol, reltol, k7, k6, g7, g6, dt)
+  return (sqrt(sum(abs2, _calculate_residuals(utilde, uprev, u, abstol, reltol)) /
+               length(u)) * dt)
+end
+
+function _compute_regularization_value(::Tsit5ConstantCache, ::Val{:stiffness_estimate},
+                                       utilde, uprev, u, abstol, reltol, k7, k6, g7, g6, dt)
+  # NOTE: 3.5068f0 is OrdinaryDiffEq.alg_stability_size(Tsit5())
+  return abs(sqrt(mean(abs2, k7 .- k6) ./ (mean(abs2, g7 .- g6) .+ eps(eltype(u))))) ./
+         3.5068f0
 end
 
 function _perform_step(integrator, cache::FourStageSRIConstantCache, p)

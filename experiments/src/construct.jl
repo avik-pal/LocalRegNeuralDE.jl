@@ -185,6 +185,7 @@ function _construct_mlp_ode(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
                neural_ode=NeuralODE(model; solver=_ode_solver(cfg.solver.ode_solver),
                                     reltol=cfg.solver.reltol, abstol=cfg.solver.abstol,
                                     save_start=false, regularize=Symbol(cfg.regularize),
+                                    regularize_type=Symbol(cfg.regularize_type),
                                     maxiters=10_000,
                                     sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())),
                sol_to_arr=WrappedFunction(diffeqsol_to_array),
@@ -209,7 +210,7 @@ function _construct_cifar10_cnn(expt::ExperimentConfig, cfg::ModelConfig; kwargs
                             Conv((3, 3), 65 => 8; pad=(1, 1)); disable_optimizations=true))
   neural_ode = NeuralODE(node_core; solver=Tsit5(), cfg.solver.reltol, cfg.solver.abstol,
                          save_start=false, regularize=Symbol(cfg.regularize),
-                         maxiters=10_000,
+                         regularize_type=Symbol(cfg.regularize_type), maxiters=10_000,
                          sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
   return Chain(; augment=AugmenterLayer(Conv((3, 3), 3 => 5; pad=(1, 1)), 3),
                bn=BatchNorm(8), neural_ode, sol_to_arr=WrappedFunction(diffeqsol_to_array),
@@ -233,8 +234,9 @@ function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig; saveat
                        Dense(cfg.ts_hidden_dims => cfg.ts_node_dims, tanh))
   neural_ode = NeuralODE(gen_dynamics; solver=_ode_solver(cfg.solver.ode_solver),
                          reltol=cfg.solver.reltol, abstol=cfg.solver.abstol,
-                         regularize=Symbol(cfg.regularize), maxiters=10_000, saveat,
-                         sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
+                         regularize=Symbol(cfg.regularize),
+                         regularize_type=Symbol(cfg.regularize_type), maxiters=10_000,
+                         saveat, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
   diffeqsol_to_array = WrappedFunction(diffeqsol_to_timeseries)
   gen_to_data = Dense(cfg.ts_node_dims, cfg.ts_in_dims)
   return Chain(; gru, rec_to_gen, reparam, neural_ode, diffeqsol_to_array, gen_to_data)

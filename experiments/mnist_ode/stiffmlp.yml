@@ -7,16 +7,16 @@ model:
     - 28
   num_classes: 10
   in_channels: 1
-  regularize_type: "error_estimate"
+  regularize_type: "stiffness_estimate"
   solver:
     ode_solver: "tsit5"
     abstol: 1.4e-8
     reltol: 1.4e-8
 
 loss:
-  w_reg_start: 5.0
-  w_reg_end: 1.0
-  w_reg_decay: "exponential"
+  w_reg_start: 0.1
+  w_reg_end: 0.1
+  w_reg_decay: "constant"
 
 dataset:
   augment: False
