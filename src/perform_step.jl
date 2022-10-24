@@ -116,7 +116,7 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
           integrator.sqdt .* L
     gtmp = integrator.g(tmp, p, t)
     Dgj = (gtmp - L) / sqdt
-    ggprime_norm = integrator.opts.internalnorm(Dgj, t)
+    ggprime_norm = _internalnorm(Dgj)
     u = @. K + L * dW + Dgj * J
   else
     for j in 1:length(dW)
@@ -128,7 +128,7 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
       gtmp = integrator.g(Kj, p, t)
       Dgj = (gtmp - L) / sqdt
       if integrator.opts.adaptive
-        ggprime_norm += integrator.opts.internalnorm(Dgj, t)
+        ggprime_norm += _internalnorm(Dgj)
       end
       if typeof(dW) <: Number
         tmp = Dgj * J
@@ -140,15 +140,18 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
     tmp = L * dW
     u = uprev + dt * du1 + tmp + mil_correction
   end
-  En = integrator.opts.internalnorm(dW, t)^3 * ggprime_norm^2 / 6
+
+  En = _internalnorm(dW)^3 * ggprime_norm^2 / 6
   du2 = integrator.f(K, p, t + dt)
-  tmp = integrator.opts.internalnorm(integrator.opts.delta * dt * (du2 - du1) / 2, t) + En
+  tmp = _internalnorm(integrator.opts.delta * dt * (du2 - du1) / 2) + En
 
   tmp = _calculate_residuals(uprev, u, integrator.opts.abstol, integrator.opts.reltol)
-  EEst = integrator.opts.internalnorm(tmp, t)
+  EEst = _internalnorm(tmp)
 
   return u, EEst * dt, 0, dt
 end
+
+_internalnorm(x) = sqrt(mean(abs2, x))
 
 @inline function _calculate_residuals(ũ, u₀, u₁, alpha, rho)
   return ũ ./ (alpha .+ max.(abs.(u₀), abs.(u₁)) .* rho)
