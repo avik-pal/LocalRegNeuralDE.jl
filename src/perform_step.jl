@@ -151,6 +151,42 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
   return u, EEst * dt, 0, dt
 end
 
+function _perform_step(integrator, cache::LambaEulerHeunConstantCache, p)
+  @unpack t, dt, uprev, u, W, f = integrator
+  du1 = integrator.f(uprev, p, t)
+  K = uprev + dt * du1
+  L = integrator.g(uprev, p, t)
+
+  if StochasticDiffEq.is_diagonal_noise(integrator.sol.prob)
+    noise = L .* W.dW
+  else
+    noise = L * W.dW
+  end
+  tmp = K .+ noise
+  gtmp2 = (1 / 2) .* (L .+ integrator.g(tmp, p, t + dt))
+  if StochasticDiffEq.is_diagonal_noise(integrator.sol.prob)
+    noise2 = gtmp2 .* W.dW
+  else
+    noise2 = gtmp2 * W.dW
+  end
+
+  u = uprev .+ (dt / 2) .* (du1 .+ integrator.f(tmp, p, t + dt)) .+ noise2
+
+  du2 = integrator.f(K, p, t + dt)
+  Ed = dt * (du2 - du1) / 2
+
+  utilde = uprev + L * integrator.sqdt
+  ggprime = (integrator.g(utilde, p, t) .- L) ./ (integrator.sqdt)
+  En = ggprime .* (W.dW .^ 2) ./ 2
+
+  EEst = sqrt(sum(abs2,
+                  _calculate_residuals(Ed, En, uprev, u, integrator.opts.abstol,
+                                       integrator.opts.reltol, integrator.opts.delta)) /
+              length(u))
+
+  return u, EEst * dt, 0, dt
+end
+
 _internalnorm(x) = sqrt(mean(abs2, x))
 
 @inline function _calculate_residuals(ũ, u₀, u₁, alpha, rho)

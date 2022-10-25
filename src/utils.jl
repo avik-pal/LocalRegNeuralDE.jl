@@ -99,4 +99,9 @@ end
   return Base.Broadcast.materialize(bc)
 end
 
-@inline DiffEqBase.ODE_DEFAULT_NORM(u::TrackedArray, t) = sqrt(mean(abs2, u))
+# @inline DiffEqBase.ODE_DEFAULT_NORM(u::TrackedArray, t) = sqrt(mean(abs2, u))
+
+function Base.getindex(g::Tracker.Grads, x::ComponentArray)
+  Tracker.istracked(getdata(x)) || error("Object not tracked: $x")
+  return g[Tracker.tracker(getdata(x))]
+end

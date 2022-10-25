@@ -5,7 +5,8 @@ using ChainRulesCore, CUDA, ComponentArrays, DiffEqBase, DiffEqCallbacks, FastBr
       SciMLSensitivity, Setfield, Statistics, StochasticDiffEq, Tracker, UnPack, Zygote
 import ChainRulesCore as CRC
 import OrdinaryDiffEq: Tsit5ConstantCache
-import StochasticDiffEq: FourStageSRIConstantCache, RKMilCommuteConstantCache
+import StochasticDiffEq: FourStageSRIConstantCache, RKMilCommuteConstantCache,
+                         LambaEulerHeunConstantCache
 import Lux: AbstractExplicitLayer, AbstractExplicitContainerLayer
 
 include("perform_step.jl")

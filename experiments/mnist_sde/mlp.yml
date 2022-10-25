@@ -14,8 +14,8 @@ model:
     reltol: 1.4e-1
 
 loss:
-  w_reg_start: 10.0
-  w_reg_end: 10.0
+  w_reg_start: 1000.0
+  w_reg_end: 1000.0
   w_reg_decay: "exponential"
 
 dataset:

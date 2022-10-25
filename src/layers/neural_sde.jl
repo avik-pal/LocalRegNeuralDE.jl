@@ -9,10 +9,8 @@ struct NeuralDSDE{R, Dr <: AbstractExplicitLayer, Di <: AbstractExplicitLayer, S
   kwargs::K
 
   function NeuralDSDE(drift::AbstractExplicitLayer, diffusion::AbstractExplicitLayer;
-                      solver=RKMilCommute(; interpretation=:Stratonovich),
-                      sensealg=BacksolveAdjoint(; autojacvec=ZygoteVJP()),
-                      tspan=(0.0f0, 1.0f0), regularize::Symbol=:unbiased,
-                      maxiters::Int=1000, kwargs...)
+                      solver=SOSRI(), sensealg=TrackerAdjoint(), tspan=(0.0f0, 1.0f0),
+                      regularize::Symbol=:unbiased, maxiters::Int=1000, kwargs...)
     _check_valid_regularize(regularize)
     return new{regularize, typeof(drift), typeof(diffusion), typeof(solver),
                typeof(sensealg), typeof(tspan), typeof(kwargs)}(drift, diffusion, solver,
@@ -67,9 +65,7 @@ function _solve_neuraldsde_generic(n::NeuralDSDE, x::AbstractArray, ps, st::Name
   end
 
   t0, t1 = n.tspan
-  # prob = SDEProblem(dudt, g, x, (Tracker.param(t0), Tracker.param(t1)), ps)
-  prob = SDEProblem(dudt, g, x, Tracker.param([t0, t1]), ps)
-  # prob = SDEProblem(dudt, g, x, (t0, t1), ps)
+  prob = SDEProblem(dudt, g, x, (t0, t1), ps)
   sol = solve(prob, n.solver; n.sensealg, n.maxiters, saveat, kwargs...)
 
   return sol, st_1, st_2, dudt, g, nfes
@@ -115,9 +111,10 @@ function (n::NeuralDSDE{:biased})(x, ps, st, ::Val{true})
   (sol, st_1, st_2, dudt, g, nfes) = _solve_neuraldsde_generic(n, x, ps, st, saveat;
                                                                kwargs...)
   rng = Lux.replicate(st.rng)
-  t1 = rand(rng, sol.t)
-  integrator = _get_dsde_integrator(sol, t1, dudt, g, (t1, t2), ps, n.solver, n.sensealg;
-                                    kwargs...)
+  # Accidentally sampling t2 will lead to stability problems
+  t1 = rand(rng, sol.t[1:(end - 1)])
+  integrator = _get_dsde_integrator(sol, t1, dudt, g, (t1, n.tspan[2]), ps, n.solver,
+                                    n.sensealg; kwargs...)
   (_, reg_val, _) = _perform_step(integrator, integrator.cache, ps)
 
   return sol,
