@@ -16,9 +16,11 @@ include("layers/common.jl")
 include("layers/neural_ode.jl")
 include("layers/latent_ode.jl")
 include("layers/neural_sde.jl")
+include("layers/deq.jl")
 
 export ArrayAndTime
 export AugmenterLayer, TDChain, NeuralODE, NeuralDSDE, LatentGRUCell, ReparameterizeLayer
+export RegularizedDEQ
 export diffeqsol_to_array, diffeqsol_to_timeseries
 
 end
