@@ -4,7 +4,13 @@ function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConf
       y_pred, st_ = Lux.apply(model, x, ps, st)
       ce_loss = logitcrossentropy(y_pred, y)
       reg_val = zero(ce_loss)
-      nfe = st_.neural_ode.nfe
+      if expt.model.sde
+        nfe_drift = st_.neural_dsde.nfe_drift
+        nfe_diffusion = st_.neural_dsde.nfe_drift
+        nfe = (nfe_drift, nfe_diffusion)
+      else
+        nfe = st_.neural_ode.nfe
+      end
 
       return (ce_loss, st_, (; y_pred, nfe, ce_loss, reg_val))
     end
@@ -12,8 +18,15 @@ function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConf
     return function cts_loss_function_with_regularization(model, ps, st, (x, y), w_reg)
       y_pred, st_ = Lux.apply(model, x, ps, st)
       ce_loss = logitcrossentropy(y_pred, y)
-      reg_val = st_.neural_ode.reg_val
-      nfe = st_.neural_ode.nfe
+      if expt.model.sde
+        reg_val = st_.neural_dsde.reg_val
+        nfe_drift = st_.neural_dsde.nfe_drift
+        nfe_diffusion = st_.neural_dsde.nfe_drift
+        nfe = (nfe_drift, nfe_diffusion)
+      else
+        reg_val = st_.neural_ode.reg_val
+        nfe = st_.neural_ode.nfe
+      end
 
       return (ce_loss + w_reg * reg_val, st_, (; y_pred, nfe, ce_loss, reg_val))
     end
@@ -145,8 +158,10 @@ function _ode_solver(s::String)
 end
 
 function construct(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
-  if cfg.model_type == "mlp"
-    return _construct_mlp(expt, cfg; kwargs...)
+  if cfg.model_type == "mlp" && !cfg.sde
+    return _construct_mlp_ode(expt, cfg; kwargs...)
+  elseif cfg.model_type == "mlp" && cfg.sde
+    return _construct_mlp_sde(expt, cfg; kwargs...)
   elseif cfg.model_type == "time_series"
     return _construct_time_series(expt, cfg; kwargs...)
   end
@@ -154,7 +169,7 @@ function construct(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
   throw(ArgumentError("unknown ModelConfig."))
 end
 
-function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
+function _construct_mlp_ode(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
   hsize = cfg.mlp_hidden_state_size
   hsize_next = hsize + cfg.mlp_time_dependent
   insize = prod(cfg.image_size) * cfg.in_channels
@@ -173,6 +188,16 @@ function _construct_mlp(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
                                     sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())),
                sol_to_arr=WrappedFunction(diffeqsol_to_array),
                classifier=Dense(insize * cfg.in_channels => cfg.num_classes))
+end
+
+function _construct_mlp_sde(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
+  return Chain(; flatten=FlattenLayer(), downsample=Dense(784 => 32),
+               neural_dsde=NeuralDSDE(Chain(Dense(32 => 64, tanh), Dense(64 => 32)),
+                                      Dense(32 => 32); reltol=cfg.solver.reltol,
+                                      abstol=cfg.solver.abstol, save_start=false,
+                                      regularize=Symbol(cfg.regularize), maxiters=10_000),
+               sol_to_arr=WrappedFunction(diffeqsol_to_array),
+               classifier=Dense(32 => cfg.num_classes))
 end
 
 function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig; saveat, kwargs...)

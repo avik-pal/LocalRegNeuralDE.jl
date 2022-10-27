@@ -85,7 +85,8 @@ function Base.close(csv::CSVLogger)
 end
 
 function create_logger(base_dir::String, train_length::Int, eval_length::Int,
-                       expt_name::String, config::Dict; latent_ode::Bool=false)
+                       expt_name::String, config::Dict; latent_ode::Bool=false,
+                       sde::Bool=false)
   if !isdir(base_dir)
     @warn "$(base_dir) doesn't exist. Creating a directory."
     mkpath(base_dir)
@@ -108,7 +109,7 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     (latent_ode ? ["Neg Log Likelihood", "KL Divergence"] : ["Cross Entropy Loss"])...,
     "Regularize Value",
     "Net Loss",
-    "NFE",
+    (sde ? ["NFE Drift", "NFE Diffusion"] : ["NFE"])...,
     (latent_ode ? [] : ["Accuracy (Top 1)", "Accuracy (Top 5)"])...,
   ]
   train_loggable_dict(args...) = Dict(zip(.*(("Train/",), train_csv_header), args))
@@ -122,7 +123,7 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     (latent_ode ? ["Neg Log Likelihood", "KL Divergence"] : ["Cross Entropy Loss"])...,
     "Regularize Value",
     "Net Loss",
-    "NFE",
+    (sde ? ["NFE Drift", "NFE Diffusion"] : ["NFE"])...,
     (latent_ode ? [] : ["Accuracy (Top 1)", "Accuracy (Top 5)"])...,
   ]
   eval_loggable_dict(args...) = Dict(zip(.*(("Eval/",), eval_csv_header), args))
@@ -147,7 +148,11 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
        :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
        :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
      ])...,
-    :nfe => AverageMeter("NFE", "3.2f"),
+    (sde ?
+     [
+       :nfe_drift => AverageMeter("NFE Drift", "3.2f"),
+       :nfe_diffusion => AverageMeter("NFE Diffusion", "3.2f"),
+     ] : [:nfe => AverageMeter("NFE", "3.2f")])...,
   ]
 
   progress = ProgressMeter(train_length, Tuple(last.(_tloggers)), "Train:")
@@ -167,7 +172,11 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
        :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
        :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
      ])...,
-    :nfe => AverageMeter("NFE", "3.2f"),
+     (sde ?
+      [
+        :nfe_drift => AverageMeter("NFE Drift", "3.2f"),
+        :nfe_diffusion => AverageMeter("NFE Diffusion", "3.2f"),
+      ] : [:nfe => AverageMeter("NFE", "3.2f")])...,
   ]
 
   progress = ProgressMeter(eval_length, Tuple(last.(_tloggers)), "Test:")
