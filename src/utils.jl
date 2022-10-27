@@ -62,8 +62,10 @@ CRC.@non_differentiable _create_integrator(::Any...)
 CRC.@non_differentiable OrdinaryDiffEq.check_error!(::Any...)
 CRC.@non_differentiable CUDA.ones(::Any...)
 
-_cat(x, y, ::Val{dims}) where {dims} = cat(x, y; dims)
-_cat(t::Union{<:Tuple, <:AbstractVector}, ::Val{dims}) where {dims} = cat(t...; dims)
+@inline _cat(x, y, ::Val{dims}) where {dims} = cat(x, y; dims)
+@inline function _cat(t::Union{<:Tuple, <:AbstractVector}, ::Val{dims}) where {dims}
+  return cat(t...; dims)
+end
 
 # Tracker patches
 Tracker.param(ca::ComponentArray) = ComponentArray(Tracker.param(getdata(ca)), getaxes(ca))
