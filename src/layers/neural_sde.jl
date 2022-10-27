@@ -9,9 +9,7 @@ struct NeuralDSDE{R, Dr <: AbstractExplicitLayer, Di <: AbstractExplicitLayer, S
   kwargs::K
 
   function NeuralDSDE(drift::AbstractExplicitLayer, diffusion::AbstractExplicitLayer;
-                      solver=SOSRI(),
-                      sensealg=SensitivityADPassThrough(),
-                      tspan=(0.0f0, 1.0f0),
+                      solver=SOSRI(), sensealg=TrackerAdjoint(), tspan=(0.0f0, 1.0f0),
                       regularize::Symbol=:unbiased, maxiters::Int=1000, kwargs...)
     _check_valid_regularize(regularize)
     return new{regularize, typeof(drift), typeof(diffusion), typeof(solver),
@@ -28,8 +26,14 @@ function Lux.initialstates(rng::AbstractRNG, layer::NeuralDSDE)
           reg_val=0.0f0, rng=Lux.replicate(rng), training=Val(true))
 end
 
+_sol_at_t(sol::RODESolution, t) = sol(t)
+
+function _sol_at_t(sol::TrackedArray, t)
+  return selectdim(sol, ndims(sol) - 1, findfirst(==(t), sol.data.t))
+end
+
 function _get_dsde_integrator(sol, t, dudt, g, tspan, ps, solver, sensealg; kwargs...)
-  u = sol(t)
+  u = _sol_at_t(sol, t)
   prob = SDEProblem(dudt, g, u, tspan, ps)
   integrator = _create_integrator(prob, solver; sensealg, kwargs...)
   return integrator
@@ -38,7 +42,7 @@ end
 CRC.@non_differentiable _get_dsde_integrator(::Any...)
 
 function _update_nfe!(nfes::Vector, idx::Int64, val)
-  nfes[idx] += val
+  return nfes[idx] += val
 end
 
 CRC.@non_differentiable _update_nfe!(::Any...)
@@ -60,7 +64,8 @@ function _solve_neuraldsde_generic(n::NeuralDSDE, x::AbstractArray, ps, st::Name
     return get_array(u_)
   end
 
-  prob = SDEProblem(dudt, g, x, n.tspan, ps)
+  t0, t1 = n.tspan
+  prob = SDEProblem(dudt, g, x, (t0, t1), ps)
   sol = solve(prob, n.solver; n.sensealg, n.maxiters, saveat, kwargs...)
 
   return sol, st_1, st_2, dudt, g, nfes
@@ -88,7 +93,7 @@ function (n::NeuralDSDE{:unbiased})(x, ps, st, ::Val{true})
                                                             n.kwargs...)
   (sol, st_1, st_2, dudt, g, nfes) = _solve_neuraldsde_generic(n, x, ps, st, saveat;
                                                                kwargs...)
-  integrator = _get_dsde_integrator(sol, t1, dudt, g, n.tspan, ps, n.solver, n.sensealg;
+  integrator = _get_dsde_integrator(sol, t1, dudt, g, (t1, t2), ps, n.solver, n.sensealg;
                                     kwargs...)
   (_, reg_val, _) = _perform_step(integrator, integrator.cache, ps)
 
@@ -106,9 +111,10 @@ function (n::NeuralDSDE{:biased})(x, ps, st, ::Val{true})
   (sol, st_1, st_2, dudt, g, nfes) = _solve_neuraldsde_generic(n, x, ps, st, saveat;
                                                                kwargs...)
   rng = Lux.replicate(st.rng)
-  t1 = rand(rng, sol.t)
-  integrator = _get_dsde_integrator(sol, t1, dudt, g, n.tspan, ps, n.solver, n.sensealg;
-                                    kwargs...)
+  # Accidentally sampling t2 will lead to stability problems
+  t1 = rand(rng, sol.t[1:(end - 1)])
+  integrator = _get_dsde_integrator(sol, t1, dudt, g, (t1, n.tspan[2]), ps, n.solver,
+                                    n.sensealg; kwargs...)
   (_, reg_val, _) = _perform_step(integrator, integrator.cache, ps)
 
   return sol,

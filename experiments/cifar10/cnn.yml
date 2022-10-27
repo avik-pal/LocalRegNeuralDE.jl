@@ -14,8 +14,8 @@ model:
     reltol: 1.0e-4
 
 loss:
-  w_reg_start: 5.0
-  w_reg_end: 1.0
+  w_reg_start: 2.5
+  w_reg_end: 2.5
   w_reg_decay: "exponential"
 
 dataset:
@@ -25,13 +25,13 @@ dataset:
 
 train:
   total_steps: 31250
-  print_frequency: 100
-  evaluate_every: 500
+  print_frequency: 500
+  evaluate_every: 2500
 
 optimizer:
-  optimizer: "adamw"
-  learning_rate: 0.01
+  optimizer: "adam"
+  learning_rate: 0.001
   scheduler:
     lr_scheduler: "cosine"
-    cosine_lr_div_factor: 20.0
+    cosine_lr_div_factor: 10.0
     cosine_cycle_length: 31250

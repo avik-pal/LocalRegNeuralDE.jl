@@ -18,12 +18,13 @@ function _get_loss_function_classification(expt::ExperimentConfig, cfg::LossConf
     return function cts_loss_function_with_regularization(model, ps, st, (x, y), w_reg)
       y_pred, st_ = Lux.apply(model, x, ps, st)
       ce_loss = logitcrossentropy(y_pred, y)
-      reg_val = st_.neural_ode.reg_val
       if expt.model.sde
+        reg_val = st_.neural_dsde.reg_val
         nfe_drift = st_.neural_dsde.nfe_drift
         nfe_diffusion = st_.neural_dsde.nfe_drift
         nfe = (nfe_drift, nfe_diffusion)
       else
+        reg_val = st_.neural_ode.reg_val
         nfe = st_.neural_ode.nfe
       end
 
@@ -198,9 +199,7 @@ function _construct_mlp_sde(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
                neural_dsde=NeuralDSDE(Chain(Dense(32 => 64, tanh), Dense(64 => 32)),
                                       Dense(32 => 32); reltol=cfg.solver.reltol,
                                       abstol=cfg.solver.abstol, save_start=false,
-                                      regularize=Symbol(cfg.regularize), maxiters=10_000,
-                                      sensealg=InterpolatingAdjoint(;
-                                                                    autojacvec=ZygoteVJP())),
+                                      regularize=Symbol(cfg.regularize), maxiters=10_000),
                sol_to_arr=WrappedFunction(diffeqsol_to_array),
                classifier=Dense(32 => cfg.num_classes))
 end

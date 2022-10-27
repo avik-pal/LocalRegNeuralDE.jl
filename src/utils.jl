@@ -74,6 +74,15 @@ Base.nextfloat(x::Tracker.TrackedReal) = Tracker.TrackedReal(nextfloat(x.data))
 
 Tracker.extract_grad!(ca::ComponentArray) = Tracker.extract_grad!(getdata(ca))
 
+Base.Float32(x::Tracker.TrackedReal) = Float32(x.data)
+
+function Base.materialize(bc::Base.Broadcast.Broadcasted{Tracker.TrackedStyle, Nothing,
+                                                         typeof(zero),
+                                                         <:Tuple{<:ComponentVector}})
+  ca = first(bc.args)
+  return ComponentArray(zero.(getdata(ca)), getaxes(ca))
+end
+
 # This is a weird type piracy but is needed to make the NeuralDSDE to work
 function LinearAlgebra.mul!(A::AbstractVector{T}, B::AbstractMatrix{T},
                             C::AbstractMatrix{T}, b1::Bool, b2::Bool) where {T}
@@ -85,4 +94,16 @@ function Base.setproperty!(x::Tracker.Tracked{Z}, f::Symbol,
                            v::AbstractVector) where {Z <: SubArray}
   getproperty(x, f) = @view v[:]
   return getproperty(x, f)
+end
+
+# FastBroadcast + Zygote.jl
+@inline function FastBroadcast.fast_materialize(::SB, ::DB, bc) where {SB, DB}
+  return Base.Broadcast.materialize(bc)
+end
+
+# @inline DiffEqBase.ODE_DEFAULT_NORM(u::TrackedArray, t) = sqrt(mean(abs2, u))
+
+function Base.getindex(g::Tracker.Grads, x::ComponentArray)
+  Tracker.istracked(getdata(x)) || error("Object not tracked: $x")
+  return g[Tracker.tracker(getdata(x))]
 end

@@ -68,7 +68,8 @@ function (n::NeuralODE{:unbiased})(x, ps, st, ::Val{true})
   saveat, kwargs, needs_correction = _resolve_saveat_kwargs(Val(:unbiased), n.tspan, t1;
                                                             n.kwargs...)
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
-  integrator = _get_ode_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg; kwargs...)
+  integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, n.solver, n.sensealg;
+                                   kwargs...)
   (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
   nfe = sol.destats.nf + nf2
 
@@ -84,7 +85,8 @@ function (n::NeuralODE{:biased})(x, ps, st, ::Val{true})
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
   rng = Lux.replicate(st.rng)
   t1 = rand(rng, sol.t)
-  integrator = _get_ode_integrator(sol, t1, dudt, n.tspan, ps, n.solver, n.sensealg; kwargs...)
+  integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, n.solver, n.sensealg;
+                                   kwargs...)
   (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
   nfe = sol.destats.nf + nf2
 

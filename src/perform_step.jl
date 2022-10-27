@@ -116,7 +116,7 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
           integrator.sqdt .* L
     gtmp = integrator.g(tmp, p, t)
     Dgj = (gtmp - L) / sqdt
-    ggprime_norm = integrator.opts.internalnorm(Dgj, t)
+    ggprime_norm = _internalnorm(Dgj)
     u = @. K + L * dW + Dgj * J
   else
     for j in 1:length(dW)
@@ -128,7 +128,7 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
       gtmp = integrator.g(Kj, p, t)
       Dgj = (gtmp - L) / sqdt
       if integrator.opts.adaptive
-        ggprime_norm += integrator.opts.internalnorm(Dgj, t)
+        ggprime_norm += _internalnorm(Dgj)
       end
       if typeof(dW) <: Number
         tmp = Dgj * J
@@ -140,15 +140,54 @@ function _perform_step(integrator, cache::RKMilCommuteConstantCache, p)
     tmp = L * dW
     u = uprev + dt * du1 + tmp + mil_correction
   end
-  En = integrator.opts.internalnorm(dW, t)^3 * ggprime_norm^2 / 6
+
+  En = _internalnorm(dW)^3 * ggprime_norm^2 / 6
   du2 = integrator.f(K, p, t + dt)
-  tmp = integrator.opts.internalnorm(integrator.opts.delta * dt * (du2 - du1) / 2, t) + En
+  tmp = _internalnorm(integrator.opts.delta * dt * (du2 - du1) / 2) + En
 
   tmp = _calculate_residuals(uprev, u, integrator.opts.abstol, integrator.opts.reltol)
-  EEst = integrator.opts.internalnorm(tmp, t)
+  EEst = _internalnorm(tmp)
 
   return u, EEst * dt, 0, dt
 end
+
+function _perform_step(integrator, cache::LambaEulerHeunConstantCache, p)
+  @unpack t, dt, uprev, u, W, f = integrator
+  du1 = integrator.f(uprev, p, t)
+  K = uprev + dt * du1
+  L = integrator.g(uprev, p, t)
+
+  if StochasticDiffEq.is_diagonal_noise(integrator.sol.prob)
+    noise = L .* W.dW
+  else
+    noise = L * W.dW
+  end
+  tmp = K .+ noise
+  gtmp2 = (1 / 2) .* (L .+ integrator.g(tmp, p, t + dt))
+  if StochasticDiffEq.is_diagonal_noise(integrator.sol.prob)
+    noise2 = gtmp2 .* W.dW
+  else
+    noise2 = gtmp2 * W.dW
+  end
+
+  u = uprev .+ (dt / 2) .* (du1 .+ integrator.f(tmp, p, t + dt)) .+ noise2
+
+  du2 = integrator.f(K, p, t + dt)
+  Ed = dt * (du2 - du1) / 2
+
+  utilde = uprev + L * integrator.sqdt
+  ggprime = (integrator.g(utilde, p, t) .- L) ./ (integrator.sqdt)
+  En = ggprime .* (W.dW .^ 2) ./ 2
+
+  EEst = sqrt(sum(abs2,
+                  _calculate_residuals(Ed, En, uprev, u, integrator.opts.abstol,
+                                       integrator.opts.reltol, integrator.opts.delta)) /
+              length(u))
+
+  return u, EEst * dt, 0, dt
+end
+
+_internalnorm(x) = sqrt(mean(abs2, x))
 
 @inline function _calculate_residuals(ũ, u₀, u₁, alpha, rho)
   return ũ ./ (alpha .+ max.(abs.(u₀), abs.(u₁)) .* rho)
