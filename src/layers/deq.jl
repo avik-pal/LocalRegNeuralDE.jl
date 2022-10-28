@@ -59,5 +59,24 @@ function (n::RegularizedDEQ{:unbiased})(x, ps, st, ::Val{true}, d::Val{D}) where
   integrator = _get_deq_ode_integrator(st_.solution.sol.sol, t1, _get_deq_ode_solver(n))
   (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
 
-  return y, (; deq=st_, nfe=st_.solution.nfe + nf2, reg_val, rng, st.training)
+  return y,
+         (; deq=st_, nfe=st_.solution.nfe + nf2, reg_val=reg_val, rng,
+          st.training)
+end
+
+function (n::RegularizedDEQ{:biased})(x, ps, st, ::Val{true}, d::Val{D}) where {D}
+  D != 0 && return n(x, ps, st, Val(false), d)
+
+  rng = Lux.replicate(st.rng)
+  y, st_ = n.deq(x, ps, st.deq)
+
+  sol = st_.solution.sol.sol
+  t1 = rand(rng, sol.t)
+
+  integrator = _get_deq_ode_integrator(sol, t1, _get_deq_ode_solver(n))
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+
+  return y,
+         (; deq=st_, nfe=st_.solution.nfe + nf2, reg_val=reg_val, rng,
+          st.training)
 end
