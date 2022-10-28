@@ -168,6 +168,8 @@ function construct(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
     return _construct_time_series(expt, cfg; kwargs...)
   elseif cfg.model_type == "cifar10_cnn"
     return _construct_cifar10_cnn(expt, cfg; kwargs...)
+  elseif cfg.model_type == "cifar10_deq"
+    return _construct_cifar10_deq(expt, cfg, cfg.deq; kwargs...)
   end
 
   throw(ArgumentError("unknown ModelConfig."))
@@ -216,6 +218,35 @@ function _construct_cifar10_cnn(expt::ExperimentConfig, cfg::ModelConfig; kwargs
                bn=BatchNorm(8), neural_ode, sol_to_arr=WrappedFunction(diffeqsol_to_array),
                classifier=Chain(Conv((3, 3), 8 => 1; pad=(1, 1)), FlattenLayer(),
                                 Dense(32 * 32 => 10)))
+end
+
+function __replace_deq_with_regularizer(regularize::Symbol)
+  __replace_deq_with_regularizer_closure(l) = l
+  function __replace_deq_with_regularizer_closure(l::LocalRegNeuralDE.AbstractDEQ)
+    return RegularizedDEQ(l; regularize)
+  end
+  return __replace_deq_with_regularizer_closure
+end
+
+function _construct_cifar10_deq(expt::ExperimentConfig, cfg_base::ModelConfig,
+                                cfg::DEQModelConfig; kwargs...)
+  sensealg = DeepEquilibriumAdjoint(cfg.sensealg.abstol, cfg.sensealg.reltol,
+                                    cfg.sensealg.maxiters;
+                                    mode=cfg.sensealg.jfb ? :jfb : :vanilla)
+  solver = ContinuousDEQSolver(Tsit5(); mode=Symbol(cfg.solver.stop_mode),
+                               cfg.solver.abstol, cfg.solver.reltol,
+                               cfg.solver.abstol_termination, cfg.solver.reltol_termination)
+  model = DEQExperiments.get_model(; cfg.num_channels, cfg.downsample_times,
+                                   cfg.num_branches, cfg.expansion_factor, cfg.dropout_rate,
+                                   cfg.group_count, cfg.big_kernels, cfg.head_channels,
+                                   cfg.fuse_method, cfg.final_channelsize, cfg.num_classes,
+                                   cfg.model_type, cfg.maxiters, cfg.image_size,
+                                   cfg.weight_norm, cfg.in_channels, solver, sensealg)
+  # Calling this a NeuralODE to avoid unnecessary branching in the loss function code
+  return Chain(; initial_block=model.layers[1],
+               neural_ode=RegularizedDEQ(model.layers[2];
+                                         regularize=Symbol(cfg_base.regularize)),
+               classifier=model.layers[3])
 end
 
 function _construct_time_series(expt::ExperimentConfig, cfg::ModelConfig; saveat, kwargs...)

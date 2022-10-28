@@ -38,7 +38,11 @@ function main(config_name::String, cfg::ExperimentConfig)
   # Manually create TrainState since ComponentArrays conversion doesn't smoothly work by
   # default
   ps, st = Lux.setup(rng, model)
-  ps = ps |> ComponentArray |> gpu
+  if cfg.model.model_type == "cifar10_deq"
+    ps = ps |> gpu
+  else
+    ps = ps |> ComponentArray |> gpu
+  end
   st = st |> gpu
   opt_state = Optimisers.setup(opt, ps)
   tstate = Training.TrainState(model, ps, st, opt_state, 0)

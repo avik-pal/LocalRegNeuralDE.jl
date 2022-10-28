@@ -10,6 +10,44 @@ end
   reltol::Float32 = 5.0f-2
 end
 
+@option struct DEQSensitivityConfig
+  jfb::Bool = false
+  abstol::Float32 = 5.0f-2
+  reltol::Float32 = 5.0f-2
+  maxiters::Int = 20
+end
+
+@option struct DEQSolverConfig
+  continuous::Bool = true
+  stop_mode::String = "rel_norm"
+  ode_solver::String = "vcab3"
+  abstol::Float32 = 5.0f-2
+  reltol::Float32 = 5.0f-2
+  abstol_termination::Float32 = 5.0f-2
+  reltol_termination::Float32 = 5.0f-2
+end
+
+@option struct DEQModelConfig
+  num_classes::Int = 10
+  dropout_rate::Float32 = 0.25f0
+  group_count::Int = 8
+  weight_norm::Bool = true
+  downsample_times::Int = 0
+  expansion_factor::Int = 5
+  image_size::Vector{Int64} = [32, 32]
+  num_branches::Int = 2
+  big_kernels::Vector{Int64} = [0, 0]
+  head_channels::Vector{Int64} = [8, 16]
+  num_channels::Vector{Int64} = [24, 24]
+  fuse_method::String = "sum"
+  final_channelsize::Int = 200
+  model_type::String = "vanilla"
+  maxiters::Int = 18
+  in_channels::Int = 3
+  sensealg::DEQSensitivityConfig = DEQSensitivityConfig()
+  solver::DEQSolverConfig = DEQSolverConfig()
+end
+
 @option struct ModelConfig
   model_type::String = "mlp"  # Options: `mlp`, `time_series`
   regularize::String = "unbiased"
@@ -17,6 +55,9 @@ end
   in_channels::Int = 3
   num_classes::Int = 10
   sde::Bool = false
+
+  # DEQ
+  deq::DEQModelConfig = DEQModelConfig()
 
   # Solver
   solver::SolverConfig = SolverConfig()

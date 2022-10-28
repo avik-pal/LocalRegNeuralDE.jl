@@ -10,4 +10,6 @@ using Pkg
 
 Pkg.add(url="https://github.com/SciML/DeepEquilibriumNetworks.jl", subdir="experiments",
         rev="ap/paper")
+Pkg.add(url="https://github.com/SciML/DeepEquilibriumNetworks.jl", rev="ap/saveat")
+Pkg.add(path="../")
 ```
