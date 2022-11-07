@@ -2,6 +2,7 @@ seed: 0
 
 model:
   regularize: "none"
+  regularize_type: "stiffness_estimate"
   image_size:
     - 28
     - 28
@@ -13,9 +14,9 @@ model:
     reltol: 1.4e-8
 
 loss:
-  w_reg_start: 5.0
-  w_reg_end: 2.5
-  w_reg_decay: "exponential"
+  w_reg_start: 0.1
+  w_reg_end: 0.1
+  w_reg_decay: "constant"
 
 dataset:
   augment: False

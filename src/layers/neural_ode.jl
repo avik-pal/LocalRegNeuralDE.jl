@@ -1,4 +1,4 @@
-struct NeuralODE{R, M <: Lux.AbstractExplicitLayer, So, Se, T, K} <:
+struct NeuralODE{R, RT, M <: Lux.AbstractExplicitLayer, So, Se, T, K} <:
        AbstractExplicitContainerLayer{(:model,)}
   model::M
   solver::So
@@ -10,15 +10,19 @@ struct NeuralODE{R, M <: Lux.AbstractExplicitLayer, So, Se, T, K} <:
   function NeuralODE(model::Lux.AbstractExplicitLayer; solver=Tsit5(),
                      sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()),
                      tspan=(0.0f0, 1.0f0), regularize::Union{Bool, Symbol}=true,
-                     maxiters::Int=1000, kwargs...)
+                     maxiters::Int=1000, regularize_type::Symbol=:error_estimate, kwargs...)
     if regularize isa Bool
       regularize = regularize ? :unbiased : :none
     end
     _check_valid_regularize(regularize)
-    return new{regularize, typeof(model), typeof(solver), typeof(sensealg), typeof(tspan),
-               typeof(kwargs)}(model, solver, sensealg, tspan, maxiters, kwargs)
+    _check_valid_regularize(regularize_type, (:error_estimate, :stiffness_estimate))
+    return new{regularize, regularize_type, typeof(model), typeof(solver), typeof(sensealg),
+               typeof(tspan), typeof(kwargs)}(model, solver, sensealg, tspan, maxiters,
+                                              kwargs)
   end
 end
+
+_get_regularize_type(::NeuralODE{R, RT}) where {R, RT} = Val(RT)
 
 function Lux.initialstates(rng::AbstractRNG, layer::NeuralODE)
   randn(rng)
@@ -68,9 +72,10 @@ function (n::NeuralODE{:unbiased})(x, ps, st, ::Val{true})
   saveat, kwargs, needs_correction = _resolve_saveat_kwargs(Val(:unbiased), n.tspan, t1;
                                                             n.kwargs...)
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
-  integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, n.solver, n.sensealg;
+  integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, Tsit5(), n.sensealg;
                                    kwargs...)
-  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps,
+                                       _get_regularize_type(n))
   nfe = sol.destats.nf + nf2
 
   sol = needs_correction ? _CorrectedDESolution(sol, n.kwargs[:saveat], t1) : sol
@@ -85,9 +90,10 @@ function (n::NeuralODE{:biased})(x, ps, st, ::Val{true})
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
   rng = Lux.replicate(st.rng)
   t1 = rand(rng, sol.t)
-  integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, n.solver, n.sensealg;
+  integrator = _get_ode_integrator(sol, t1, dudt, (t1, n.tspan[2]), ps, Tsit5(), n.sensealg;
                                    kwargs...)
-  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps,
+                                       _get_regularize_type(n))
   nfe = sol.destats.nf + nf2
 
   return sol, (; model=st_, nfe, reg_val, rng, st.training)
