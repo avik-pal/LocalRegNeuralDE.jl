@@ -14,7 +14,7 @@ model:
 
 loss:
   w_reg_start: 5.0
-  w_reg_end: 1.0
+  w_reg_end: 2.5
   w_reg_decay: "exponential"
 
 dataset:
