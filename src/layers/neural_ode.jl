@@ -89,7 +89,7 @@ function (n::NeuralODE{:biased})(x, ps, st, ::Val{true})
   saveat, kwargs = _resolve_saveat_kwargs(Val(:biased), n.tspan; n.kwargs...)
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
   rng = Lux.replicate(st.rng)
-  t1 = rand(rng, sol.t)
+  t1 = rand(rng, sol.t[1:(end - 1)])
   integrator = _get_ode_integrator(sol, t1, dudt, (t1, n.tspan[2]), ps, Tsit5(), n.sensealg;
                                    kwargs...)
   (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps,

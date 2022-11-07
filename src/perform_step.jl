@@ -37,8 +37,10 @@ end
 function _compute_regularization_value(::Tsit5ConstantCache, ::Val{:stiffness_estimate},
                                        utilde, uprev, u, abstol, reltol, k7, k6, g7, g6, dt)
   # NOTE: 3.5068f0 is OrdinaryDiffEq.alg_stability_size(Tsit5())
-  est = abs(sqrt(mean(abs2, k7 .- k6)) ./ sqrt(mean(abs2, g7 .- g6))) ./ 3.5068f0
-  return isfinite(est) ? est : oftype(est, 0)
+  den = sqrt(mean(abs2, g7 .- g6))
+  iszero(den) && return 0.0f0
+  est = abs(sqrt(mean(abs2, k7 .- k6)) ./ (den + eps(eltype(u)))) ./ 3.5068f0
+  return est
 end
 
 function _perform_step(integrator, cache::FourStageSRIConstantCache, p)
