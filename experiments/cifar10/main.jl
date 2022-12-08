@@ -97,7 +97,7 @@ function main(config_name::String, cfg::ExperimentConfig)
     Setfield.@set! tstate.optimizer_state = Optimisers.adjust(tstate.optimizer_state,
                                                               sched(step + 1))
 
-    acc1, acc5 = accuracy(cpu(stats.y_pred), cpu(y), (1, 5))
+    acc1 = accuracy(cpu(stats.y_pred), cpu(y))
 
     # Logging
     loggers.progress_loggers.train.avg_meters.batch_time(data_time +
@@ -112,7 +112,7 @@ function main(config_name::String, cfg::ExperimentConfig)
     loggers.progress_loggers.train.avg_meters.ce_loss(stats.ce_loss, bsize)
     loggers.progress_loggers.train.avg_meters.reg_val(stats.reg_val, bsize)
     loggers.progress_loggers.train.avg_meters.top1(acc1, bsize)
-    loggers.progress_loggers.train.avg_meters.top5(acc5, bsize)
+    loggers.progress_loggers.train.avg_meters.top5(-1, bsize)
     loggers.progress_loggers.train.avg_meters.nfe(stats.nfe, bsize)
 
     if step % cfg.train.print_frequency == 1
@@ -143,7 +143,7 @@ function main(config_name::String, cfg::ExperimentConfig)
 
         bsize = size(x, ndims(x))
 
-        acc1, acc5 = accuracy(cpu(stats.y_pred), cpu(y), (1, 5))
+        acc1 = accuracy(cpu(stats.y_pred), cpu(y))
 
         loggers.progress_loggers.eval.avg_meters.batch_time(data_time + fwd_time, bsize)
         loggers.progress_loggers.eval.avg_meters.data_time(data_time, bsize)
@@ -152,7 +152,7 @@ function main(config_name::String, cfg::ExperimentConfig)
         loggers.progress_loggers.eval.avg_meters.ce_loss(stats.ce_loss, bsize)
         loggers.progress_loggers.eval.avg_meters.reg_val(stats.reg_val, bsize)
         loggers.progress_loggers.eval.avg_meters.top1(acc1, bsize)
-        loggers.progress_loggers.eval.avg_meters.top5(acc5, bsize)
+        loggers.progress_loggers.eval.avg_meters.top5(-1, bsize)
         loggers.progress_loggers.eval.avg_meters.nfe(stats.nfe, bsize)
 
         # Free memory eagarly

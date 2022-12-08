@@ -13,6 +13,7 @@ end
 @option struct ModelConfig
   model_type::String = "mlp"  # Options: `mlp`, `time_series`
   regularize::String = "unbiased"
+  regularize_type::String = "error_estimate"
   image_size::Vector{Int64} = [32, 32]
   in_channels::Int = 3
   num_classes::Int = 10
