@@ -154,6 +154,10 @@ end
 function _ode_solver(s::String)
   if s == "tsit5"
     return Tsit5()
+  elseif s == "vcab3"
+    return VCAB3()
+  elseif s == "vcabm3"
+    return VCABM3()
   end
 
   throw(ArgumentError("unknown SolverConfig."))
@@ -206,16 +210,20 @@ function _construct_mlp_sde(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
 end
 
 function _construct_cifar10_cnn(expt::ExperimentConfig, cfg::ModelConfig; kwargs...)
-  node_core = TDChain(Chain(Chain(Conv((3, 3), 9 => 64; pad=(1, 1)), BatchNorm(64, tanh)),
-                            Chain(Conv((3, 3), 65 => 64; pad=(1, 1)), BatchNorm(64, tanh)),
-                            Conv((3, 3), 65 => 8; pad=(1, 1)); disable_optimizations=true))
-  neural_ode = NeuralODE(node_core; solver=Tsit5(), cfg.solver.reltol, cfg.solver.abstol,
-                         save_start=false, regularize=Symbol(cfg.regularize),
+  node_core = TDChain(Chain(Chain(Conv((3, 3), 9 => 64; pad=(1, 1), use_bias=false),
+                                  BatchNorm(64, gelu)),
+                            Chain(Conv((3, 3), 65 => 64; pad=(1, 1), use_bias=false),
+                                  BatchNorm(64, gelu)),
+                            Conv((3, 3), 65 => 8; pad=(1, 1), use_bias=false);
+                            disable_optimizations=true))
+  neural_ode = NeuralODE(node_core; solver=_ode_solver(cfg.solver.ode_solver),
+                         cfg.solver.reltol, cfg.solver.abstol, save_start=false,
+                         regularize=Symbol(cfg.regularize),
                          regularize_type=Symbol(cfg.regularize_type), maxiters=10_000,
                          sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
   return Chain(; augment=AugmenterLayer(Conv((3, 3), 3 => 5; pad=(1, 1)), 3),
                bn=BatchNorm(8), neural_ode, sol_to_arr=WrappedFunction(diffeqsol_to_array),
-               classifier=Chain(Conv((3, 3), 8 => 1; pad=(1, 1)), FlattenLayer(),
+               classifier=Chain(Conv((3, 3), 8 => 1, gelu; pad=(1, 1)), FlattenLayer(),
                                 Dense(32 * 32 => 10)))
 end
 
