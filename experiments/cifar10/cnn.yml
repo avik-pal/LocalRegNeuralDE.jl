@@ -30,8 +30,8 @@ train:
 
 optimizer:
   optimizer: "adam"
-  learning_rate: 0.001
+  learning_rate: 0.003
   scheduler:
     lr_scheduler: "cosine"
-    cosine_lr_div_factor: 10.0
+    cosine_lr_div_factor: 30.0
     cosine_cycle_length: 31250

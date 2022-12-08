@@ -10,8 +10,8 @@ model:
 
 loss:
   w_reg_start: 100.0
-  w_reg_end: 100.0
-  w_reg_decay: "constant"
+  w_reg_end: 10.0
+  w_reg_decay: "exponential"
 
 dataset:
   augment: False
