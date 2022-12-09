@@ -107,3 +107,15 @@ function Base.getindex(g::Tracker.Grads, x::ComponentArray)
   Tracker.istracked(getdata(x)) || error("Object not tracked: $x")
   return g[Tracker.tracker(getdata(x))]
 end
+
+@generated function split_and_reshape(x::AbstractMatrix, ::T, ::S) where {T, S}
+  idxs, shapes = known(T), known(S)
+  dims = [reshape((idxs[i] + 1):idxs[i + 1], shapes[i]...) for i in 1:(length(idxs) - 1)]
+  varnames = [gensym("x_view") for _ in dims]
+  calls = []
+  for (i, dim) in enumerate(dims)
+    push!(calls, :($(varnames[i]) = view(x, $dim, :)))
+  end
+  push!(calls, :(return tuple($(Tuple(varnames)...))))
+  return Expr(:block, calls...)
+end

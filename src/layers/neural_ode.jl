@@ -81,6 +81,7 @@ end
 (n::NeuralODE{:biased})(x, ps, st, ::Val{false}) = _vanilla_node_fallback(n, x, ps, st)
 
 function (n::NeuralODE{:biased})(x, ps, st, ::Val{true})
+  _, t2 = n.tspan
   saveat, kwargs = _resolve_saveat_kwargs(Val(:biased), n.tspan; n.kwargs...)
   (sol, st_, dudt) = _solve_neuralode_generic(n, x, ps, st, saveat; kwargs...)
   rng = Lux.replicate(st.rng)

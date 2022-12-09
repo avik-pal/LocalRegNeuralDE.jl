@@ -96,6 +96,7 @@ function main(config_name::String, cfg::ExperimentConfig)
     loss, _, stats, tstate, gs, step_stats = run_training_step(vjp_rule, loss_function,
                                                                (x, y), tstate,
                                                                w_reg_sched(step))
+    @set! tstate.states = Lux.update_state(tstate.states, :update_mask, Val(true))
 
     # LR Update
     Setfield.@set! tstate.optimizer_state = Optimisers.adjust(tstate.optimizer_state,
