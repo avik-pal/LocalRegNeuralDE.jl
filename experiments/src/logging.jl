@@ -120,7 +120,7 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     "Batch Time",
     "Data Time",
     "Forward Pass Time",
-    (latent_ode ? ["Neg Log Likelihood", "KL Divergence"] : ["Cross Entropy Loss"])...,
+    (latent_ode ? [] : ["Cross Entropy Loss"])...,
     "Regularize Value",
     "Net Loss",
     (sde ? ["NFE Drift", "NFE Diffusion"] : ["NFE"])...,
@@ -136,23 +136,23 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     :fwd_time => AverageMeter("Forward Pass Time", "6.3f"),
     :bwd_time => AverageMeter("Backward Pass Time", "6.3f"),
     :opt_time => AverageMeter("Optimizer Time", "6.3f"),
-    :loss => AverageMeter("Net Loss", "6.3f"),
     (latent_ode ?
      [
        :neg_ll_loss => AverageMeter("Neg Log Likelihood", "6.3e"),
        :kl_div => AverageMeter("KL Divergence", "6.3e"),
      ] : [:ce_loss => AverageMeter("Cross Entropy Loss", "6.3e")])...,
     :reg_val => AverageMeter("Regularize Value", "6.3e"),
-    (latent_ode ? [] :
-     [
-       :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
-       :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
-     ])...,
+    :loss => AverageMeter("Net Loss", "6.3f"),
     (sde ?
      [
        :nfe_drift => AverageMeter("NFE Drift", "3.2f"),
        :nfe_diffusion => AverageMeter("NFE Diffusion", "3.2f"),
      ] : [:nfe => AverageMeter("NFE", "3.2f")])...,
+    (latent_ode ? [] :
+     [
+       :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
+       :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
+     ])...,
   ]
 
   progress = ProgressMeter(train_length, Tuple(last.(_tloggers)), "Train:")
@@ -164,19 +164,19 @@ function create_logger(base_dir::String, train_length::Int, eval_length::Int,
     :batch_time => AverageMeter("Batch Time", "6.3f"),
     :data_time => AverageMeter("Data Time", "6.3f"),
     :fwd_time => AverageMeter("Forward Time", "6.3f"),
-    :loss => AverageMeter("Net Loss", "6.3f"),
     (latent_ode ? [] : [:ce_loss => AverageMeter("Cross Entropy Loss", "6.3e")])...,
     :reg_val => AverageMeter("Regularize Value", "6.3e"),
-    (latent_ode ? [] :
-     [
-       :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
-       :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
-     ])...,
+    :loss => AverageMeter("Net Loss", "6.3f"),
      (sde ?
       [
         :nfe_drift => AverageMeter("NFE Drift", "3.2f"),
         :nfe_diffusion => AverageMeter("NFE Diffusion", "3.2f"),
       ] : [:nfe => AverageMeter("NFE", "3.2f")])...,
+      (latent_ode ? [] :
+       [
+         :top1 => AverageMeter("Accuracy (@1)", "3.2f"),
+         :top5 => AverageMeter("Accuracy (@5)", "3.2f"),
+       ])...,
   ]
 
   progress = ProgressMeter(eval_length, Tuple(last.(_tloggers)), "Test:")

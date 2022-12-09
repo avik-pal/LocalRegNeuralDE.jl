@@ -43,8 +43,8 @@ function Lux.initialstates(rng::AbstractRNG, node::MultiScaleNeuralODE)
           nfe=-1, reg_val=0.0f0, rng=Lux.replicate(rng), training=Val(true))
 end
 
-@generated function _get_initial_condition(::S, x::AbstractArray{T, N},
-                                           st::NamedTuple{fields}) where {S, T, N, fields}
+@generated function __get_initial_condition(::S, x::AbstractArray{T, N},
+                                            st::NamedTuple{fields}) where {S, T, N, fields}
   scales = Static.known(S)
   sz = sum(prod.(scales))
   calls = []
@@ -58,7 +58,12 @@ end
   return Expr(:block, calls...)
 end
 
-CRC.@non_differentiable _get_initial_condition(::Any...)
+CRC.@non_differentiable __get_initial_condition(::Any...)
+
+function _get_initial_condition(s, x, st)
+  u0, st_ = __get_initial_condition(s[2:end], x, st)
+  return vcat(flatten(x), u0), st_
+end
 
 function _solve_multiscale_neuralode_generic(n::MultiScaleNeuralODE{R, N},
                                              u0::AbstractArray, x::AbstractArray, ps,
@@ -112,7 +117,8 @@ function (n::MultiScaleNeuralODE{:unbiased})(x, ps, st, ::Val{true})
 
   integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, Tsit5(), n.sensealg;
                                    kwargs...)
-  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps,
+                                       Val(:error_estimate))
 
   nfe = sol.destats.nf + nf2
 
@@ -133,11 +139,12 @@ function (n::MultiScaleNeuralODE{:biased})(x, ps, st, ::Val{true})
   u0, st_ = _get_initial_condition(n.scales, x, st)
   (sol, st_, dudt, dudt_) = _solve_multiscale_neuralode_generic(n, u0, x, ps, st_, saveat;
                                                                 kwargs...)
-  t1 = rand(rng, sol.t)
+  t1 = rand(rng, sol.t[1:(end - 1)])
 
   integrator = _get_ode_integrator(sol, t1, dudt, (t1, t2), ps, Tsit5(), n.sensealg;
                                    kwargs...)
-  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps)
+  (_, reg_val, nf2, _) = _perform_step(integrator, integrator.cache, ps,
+                                       Val(:error_estimate))
 
   nfe = sol.destats.nf + nf2
 
