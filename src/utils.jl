@@ -50,10 +50,9 @@ Base.similar(ca::ComponentArray, l::Int64) = similar(getdata(ca), l)
 
 _create_integrator(args...; kwargs...) = init(args...; kwargs...)
 
-function _check_valid_regularize(regularize)
-  VALID_MODES = (:none, :unbiased, :biased)
-  if !(regularize in VALID_MODES)
-    throw(ArgumentError("regularize must be one of $VALID_MODES"))
+function _check_valid_regularize(regularize, valid_modes=(:none, :unbiased, :biased))
+  if !(regularize in valid_modes)
+    throw(ArgumentError("regularize must be one of $valid_modes"))
   end
   return
 end
