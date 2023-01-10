@@ -89,7 +89,8 @@ function _vanilla_multiscale_node_fallback(n::MultiScaleNeuralODE, x, ps, st)
   (sol, st_, dudt, dudt_) = _solve_multiscale_neuralode_generic(n, u0, x, ps, st_, saveat;
                                                                 kwargs...)
 
-  y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  # y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  y = split_and_reshape(diffeqsol_to_array(sol), n.split_idxs, n.scales)
 
   return y, (; model=st_, nfe=_get_destats(sol), reg_val=0.0f0, st.rng, st.training)
 end
@@ -122,7 +123,8 @@ function (n::MultiScaleNeuralODE{:unbiased})(x, ps, st, ::Val{true})
 
   nfe = sol.destats.nf + nf2
 
-  y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  # y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  y = split_and_reshape(diffeqsol_to_array(sol), n.split_idxs, n.scales)
 
   return y, (; model=st_, nfe, reg_val, rng, st.training)
 end
@@ -148,7 +150,8 @@ function (n::MultiScaleNeuralODE{:biased})(x, ps, st, ::Val{true})
 
   nfe = sol.destats.nf + nf2
 
-  y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  # y, st_ = dudt_(diffeqsol_to_array(sol), ps, n.tspan[2])
+  y = split_and_reshape(diffeqsol_to_array(sol), n.split_idxs, n.scales)
 
   return y, (; model=st_, nfe, reg_val, rng, st.training)
 end

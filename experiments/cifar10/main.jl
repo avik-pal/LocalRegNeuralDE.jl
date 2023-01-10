@@ -1,21 +1,30 @@
 using LocalRegNeuralDE, LocalRegNeuralDEExperiments
-using ComponentArrays, CUDA, Lux, MLDatasets, MLUtils, OneHotArrays, Optimisers, Random,
-      Setfield, SimpleConfig, Statistics, Wandb
+using Augmentor, ComponentArrays, CUDA, Images, Lux, MLDatasets, MLUtils, OneHotArrays,
+      Optimisers, Random, Setfield, SimpleConfig, Statistics, Wandb
 using Lux: Training
+
+function __augment_dataset(img)
+  pipeline = FlipX(0.5) |> Resize((42, 42)) |> RCropSize(32)
+  img = colorview(RGB, permutedims(img, (3, 1, 2)))
+  return Float32.(permutedims(channelview(augment(img, pipeline)), (2, 3, 1)))
+end
 
 function get_dataloaders(; augment, data_root, eval_batchsize, train_batchsize)
   image_mean = reshape([0.4914f0, 0.4822f0, 0.4465f0], 1, 1, 3, 1)
   image_std = reshape([0.2023f0, 0.1994f0, 0.2010f0], 1, 1, 3, 1)
 
+  augment_function = augment ? __augment_dataset : identity
+
   train_dataset = CIFAR10(Float32, :train)
-  train_iter = dataloader((train_dataset.features .- image_mean) ./ image_std,
-                          onehotbatch(train_dataset.targets, 0:9), train_batchsize, true,
-                          false, true)
+  _train_dataset = mapobs(augment_function,
+                          (train_dataset.features .- image_mean) ./ image_std)
+  train_iter = dataloader(_train_dataset, onehotbatch(train_dataset.targets, 0:9),
+                          train_batchsize, true, false, true)
 
   eval_dataset = CIFAR10(Float32, :test)
-  eval_iter = dataloader((eval_dataset.features .- image_mean) ./ image_std,
-                         onehotbatch(eval_dataset.targets, 0:9), eval_batchsize, true,
-                         false, false)
+  _eval_dataset = (eval_dataset.features .- image_mean) ./ image_std
+  eval_iter = dataloader(_eval_dataset, onehotbatch(eval_dataset.targets, 0:9),
+                         eval_batchsize, true, false, false)
 
   return train_iter, eval_iter
 end

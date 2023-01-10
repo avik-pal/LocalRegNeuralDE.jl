@@ -32,7 +32,7 @@ model:
     fuse_method: "sum"
     final_channelsize: 1680
     model_type: "vanilla"
-    maxiters: 50
+    maxiters: 100
     in_channels: 3
     sensealg:
       jfb: false
@@ -49,29 +49,28 @@ model:
       reltol_termination: 5.0e-2
 
 loss:
-  w_reg_start: 1.0
-  w_reg_end: 0.1
+  w_reg_start: 0.001
+  w_reg_end: 0.5
   w_reg_decay: "exponential"
 
 optimizer:
   optimizer: "adam"
-  learning_rate: 0.001
+  learning_rate: 0.003
   nesterov: false
   momentum: 0.0
-  weight_decay: 0.0000
+  weight_decay: 0.0
   scheduler:
     lr_scheduler: "cosine"
-    cosine_lr_div_factor: 10.0
+    cosine_lr_div_factor: 100.0
     cosine_cycle_length: 90000
 
 dataset:
-  augment: false
+  augment: true
   eval_batchsize: 128
   train_batchsize: 128
 
 train:
   total_steps: 90000
-  pretrain_steps: 0
   evaluate_every: 500
   resume: ""
   evaluate: false

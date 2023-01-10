@@ -17,7 +17,7 @@ include("layers/common.jl")
 include("layers/neural_ode.jl")
 include("layers/latent_ode.jl")
 include("layers/neural_sde.jl")
-include("layers/deq.jl")
+# include("layers/deq.jl")
 include("layers/multiscale_neural_ode.jl")
 
 export ArrayAndTime

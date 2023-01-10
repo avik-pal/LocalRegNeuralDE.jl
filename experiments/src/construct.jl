@@ -245,9 +245,12 @@ function _construct_cifar10_ms_neuralode(expt::ExperimentConfig, cfg_base::Model
   return model
 end
 
+const AbstractDEQ = Union{<:DeepEquilibriumNetworks.AbstractDeepEquilibriumNetwork,
+                          <:DeepEquilibriumNetworks.AbstractSkipDeepEquilibriumNetwork}
+
 function __replace_deq_with_regularizer(regularize::Symbol)
   __replace_deq_with_regularizer_closure(l) = l
-  function __replace_deq_with_regularizer_closure(l::LocalRegNeuralDE.AbstractDEQ)
+  function __replace_deq_with_regularizer_closure(l::AbstractDEQ)
     return RegularizedDEQ(l; regularize)
   end
   return __replace_deq_with_regularizer_closure
