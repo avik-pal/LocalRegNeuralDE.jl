@@ -338,7 +338,7 @@ end
 end
 
 @testitem "NeuralDSDE: No Regularization | No Time Dependence" begin
-  using ComponentArrays, CUDA, Lux, NNlib, Random, Tracker
+  using ComponentArrays, CUDA, Lux, NNlib, Random, Zygote
 
   model = Chain(; d1=Dense(2 => 2, gelu),
                 neural_sde=NeuralDSDE(Chain(; d1=Dense(2 => 4, gelu), d2=Dense(4 => 2)),
@@ -365,7 +365,7 @@ end
 end
 
 @testitem "NeuralDSDE: Unbiased Regularization | No Time Dependence" begin
-  using ComponentArrays, CUDA, Lux, NNlib, Random, Tracker
+  using ComponentArrays, CUDA, Lux, NNlib, Random, Zygote
 
   model = Chain(; d1=Dense(2 => 2, gelu),
                 neural_sde=NeuralDSDE(Chain(; d1=Dense(2 => 4, gelu), d2=Dense(4 => 2)),
@@ -398,7 +398,7 @@ end
 end
 
 @testitem "NeuralDSDE: Biased Regularization | No Time Dependence" begin
-  using ComponentArrays, CUDA, Lux, NNlib, Random, Tracker
+  using ComponentArrays, CUDA, Lux, NNlib, Random, Zygote
 
   model = Chain(; d1=Dense(2 => 2, gelu),
                 neural_sde=NeuralDSDE(Chain(; d1=Dense(2 => 4, gelu), d2=Dense(4 => 2)),
