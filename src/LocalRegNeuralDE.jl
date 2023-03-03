@@ -4,7 +4,7 @@ using ChainRulesCore, CUDA, ComponentArrays, DiffEqBase, DiffEqCallbacks, FastBr
       Functors, LinearAlgebra, Lux, MLUtils, NNlib, OrdinaryDiffEq, Random,
       SciMLSensitivity, Setfield, Statistics, StochasticDiffEq, Tracker, UnPack, Zygote
 import ChainRulesCore as CRC
-import OrdinaryDiffEq: Tsit5ConstantCache
+import OrdinaryDiffEq: Tsit5ConstantCache, Tsit5ConstantCacheActual
 import StochasticDiffEq: FourStageSRIConstantCache, RKMilCommuteConstantCache,
                          LambaEulerHeunConstantCache
 import Lux: AbstractExplicitLayer, AbstractExplicitContainerLayer
