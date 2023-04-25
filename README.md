@@ -1,4 +1,6 @@
-# LocalRegNeuralDE: Some BlackBoxes were meant to remain closed!
+# LocalRegNeuralDE: Some Black Boxes Were Meant to Remain Closed!
+
+Official Implementation of ICML 2023 Paper [Locally Regularized Neural Differential Equations: Some Black Boxes Were Meant to Remain Closed!](https://arxiv.org/pdf/2303.02262.pdf)
 
 Extension of [RegNeuralDE](https://arxiv.org/abs/2105.03918) to allow for local
 regularization.
